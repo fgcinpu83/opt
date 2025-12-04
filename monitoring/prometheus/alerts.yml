@@ -1,0 +1,41 @@
+groups:
+  - name: arbitrage_bot_alerts
+    interval: 30s
+    rules:
+      # High job failure rate
+      - alert: HighJobFailureRate
+        expr: |
+          (
+            sum(rate(job_completed_total{status="failed"}[5m]))
+            /
+            sum(rate(job_completed_total[5m]))
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          component: engine
+        annotations:
+          summary: "High job failure rate detected"
+          description: "Job failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+      
+      # Low worker count
+      - alert: LowWorkerCount
+        expr: worker_active_count < 1
+        for: 2m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Low number of active workers"
+          description: "Only {{ $value }} workers are active"
+      
+      # Engine down
+      - alert: EngineDown
+        expr: up{job="engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: engine
+        annotations:
+          summary: "Engine is down"
+          description: "Engine instance is not responding"
