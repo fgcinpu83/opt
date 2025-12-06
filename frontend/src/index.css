@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-dark-border;
+  }
+
+  body {
+    @apply bg-dark text-gray-100 font-sans antialiased;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-lighter;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-600 rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  /* Card Component */
+  .card {
+    @apply bg-dark-lighter border border-dark-border rounded-lg p-4 shadow-lg;
+  }
+
+  .card-header {
+    @apply text-lg font-semibold mb-4 flex items-center justify-between;
+  }
+
+  /* Button Components */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2;
+  }
+
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white focus:ring-primary;
+  }
+
+  .btn-success {
+    @apply bg-success hover:bg-green-600 text-white focus:ring-success;
+  }
+
+  .btn-danger {
+    @apply bg-danger hover:bg-red-600 text-white focus:ring-danger;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-700 hover:bg-gray-600 text-white focus:ring-gray-500;
+  }
+
+  /* Input Components */
+  .input {
+    @apply w-full px-3 py-2 bg-dark border border-dark-border rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary placeholder-gray-500;
+  }
+
+  .select {
+    @apply w-full px-3 py-2 bg-dark border border-dark-border rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary;
+  }
+
+  .checkbox {
+    @apply w-4 h-4 text-primary bg-dark border-dark-border rounded focus:ring-primary;
+  }
+
+  /* Table Components */
+  .table {
+    @apply w-full text-sm;
+  }
+
+  .table thead {
+    @apply bg-dark-lighter border-b border-dark-border;
+  }
+
+  .table th {
+    @apply px-4 py-3 text-left font-semibold text-gray-400 uppercase tracking-wide;
+  }
+
+  .table td {
+    @apply px-4 py-3 border-b border-dark-border;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-dark-lighter/50;
+  }
+
+  /* Badge Components */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply bg-success/20 text-success;
+  }
+
+  .badge-warning {
+    @apply bg-warning/20 text-warning;
+  }
+
+  .badge-danger {
+    @apply bg-danger/20 text-danger;
+  }
+
+  .badge-info {
+    @apply bg-info/20 text-info;
+  }
+
+  .badge-gray {
+    @apply bg-gray-700 text-gray-300;
+  }
+
+  /* LED Indicator */
+  .led {
+    @apply w-3 h-3 rounded-full;
+  }
+
+  .led-green {
+    @apply bg-success shadow-[0_0_8px_rgba(16,185,129,0.6)];
+  }
+
+  .led-yellow {
+    @apply bg-warning shadow-[0_0_8px_rgba(245,158,11,0.6)];
+  }
+
+  .led-red {
+    @apply bg-danger shadow-[0_0_8px_rgba(239,68,68,0.6)];
+  }
+
+  .led-gray {
+    @apply bg-gray-500;
+  }
+}
+
+/* Utility Classes */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-500;
+}
+
+.glass {
+  @apply backdrop-blur-lg bg-white/5 border border-white/10;
+}
+
+/* Animation */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

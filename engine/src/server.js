@@ -9,6 +9,11 @@ const { register: metricsRegister } = require('./utils/metrics');
 const healthRoutes = require('./routes/health.routes');
 const jobRoutes = require('./routes/job.routes');
 const workerRoutes = require('./routes/worker.routes');
+const sessionsRoutes = require('./routes/sessions.routes');
+const configRoutes = require('./routes/config.routes');
+const scannerRoutes = require('./routes/scanner.routes');
+const historyRoutes = require('./routes/history.routes');
+const systemRoutes = require('./routes/system.routes');
 
 async function createServer() {
   const app = express();
@@ -34,6 +39,11 @@ async function createServer() {
   app.use('/health', healthRoutes);
   app.use('/api/v1/jobs', jobRoutes);
   app.use('/api/v1/workers', workerRoutes);
+  app.use('/api/v1/sessions', sessionsRoutes);
+  app.use('/api/v1/config', configRoutes);
+  app.use('/api/v1/scanner', scannerRoutes);
+  app.use('/api/v1/history', historyRoutes);
+  app.use('/api/v1/system', systemRoutes);
 
   // Prometheus metrics endpoint
   app.get('/metrics', async (req, res) => {
@@ -54,6 +64,40 @@ async function createServer() {
         health: {
           'GET /health': 'System health check',
           'GET /health/detailed': 'Detailed health check'
+        },
+        sessions: {
+          'POST /api/v1/sessions/login': 'Login to sportsbook',
+          'GET /api/v1/sessions': 'List sportsbook accounts',
+          'POST /api/v1/sessions/:id/refresh': 'Refresh account balance',
+          'DELETE /api/v1/sessions/:id': 'Delete account'
+        },
+        config: {
+          'GET /api/v1/config': 'Get all configurations',
+          'POST /api/v1/config/tiers': 'Update tier configurations',
+          'POST /api/v1/config/profit': 'Update profit settings',
+          'GET /api/v1/config/system': 'Get system config',
+          'POST /api/v1/config/system': 'Set system config'
+        },
+        scanner: {
+          'GET /api/v1/scanner/opportunities': 'Get active opportunities',
+          'POST /api/v1/scanner/opportunities': 'Create opportunity',
+          'GET /api/v1/scanner/live-feed': 'SSE live feed',
+          'GET /api/v1/scanner/stats': 'Scanner statistics'
+        },
+        history: {
+          'GET /api/v1/history/bets': 'Get bet history',
+          'GET /api/v1/history/bets/today': 'Today bets',
+          'GET /api/v1/history/bets/pending': 'Pending bets',
+          'GET /api/v1/history/logs': 'System logs',
+          'GET /api/v1/history/summary': 'Daily summary',
+          'GET /api/v1/history/profit': 'Profit statistics'
+        },
+        system: {
+          'GET /api/v1/system/health': 'System health status',
+          'GET /api/v1/system/stats': 'System statistics',
+          'POST /api/v1/system/worker/heartbeat': 'Worker heartbeat',
+          'GET /api/v1/system/auto-status': 'Get auto robot status',
+          'POST /api/v1/system/auto-toggle': 'Toggle auto robot'
         },
         jobs: {
           'POST /api/v1/jobs': 'Submit new job',
