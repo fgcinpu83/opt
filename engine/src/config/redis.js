@@ -8,16 +8,39 @@ let redisSub;
 
 async function connectRedis() {
   try {
+    // Extract password from REDIS_URL or use individual env variables
+    const redisUrl = process.env.REDIS_URL;
+    let redisPassword = process.env.REDIS_PASSWORD;
+    
+    // If REDIS_URL is in format redis://:PASSWORD@HOST:PORT, extract password
+    if (redisUrl) {
+      const passwordMatch = redisUrl.match(/:\/\/:(.*?)@/);
+      if (passwordMatch && passwordMatch[1]) {
+        redisPassword = passwordMatch[1];
+        logger.info('Extracted Redis password from REDIS_URL');
+      }
+    }
+
     const redisConfig = {
       host: process.env.REDIS_HOST || 'redis',
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: redisPassword,
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
       },
-      maxRetriesPerRequest: 3
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+      enableOfflineQueue: true,
+      lazyConnect: false
     };
+
+    // Log config (without password)
+    logger.info('Connecting to Redis', {
+      host: redisConfig.host,
+      port: redisConfig.port,
+      hasPassword: !!redisConfig.password
+    });
 
     // Main Redis client
     redisClient = new Redis(redisConfig);
@@ -83,10 +106,25 @@ function getRedisSub() {
   return redisSub;
 }
 
+// Export raw redis for direct access (e.g., health checks)
+function getRedis() {
+  return getRedisClient();
+}
+
 module.exports = {
   connectRedis,
   closeRedis,
   getRedisClient,
   getRedisPub,
-  getRedisSub
+  getRedisSub,
+  getRedis,
+  // Alias for backward compatibility
+  ping: async () => {
+    const client = getRedisClient();
+    return await client.ping();
+  },
+  info: async (section) => {
+    const client = getRedisClient();
+    return await client.info(section);
+  }
 };
