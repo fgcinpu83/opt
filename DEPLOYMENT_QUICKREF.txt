@@ -1,193 +1,170 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                   EXACT BASH COMMANDS TO DEPLOY                              ║
-║                   MINIMAL SPORTSBOOK AUTOMATION SYSTEM                       ║
+║                   ARBBOT PRO DASHBOARD - DEPLOYMENT QUICK REFERENCE           ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ OPTION 1: ONE-COMMAND AUTOMATED DEPLOYMENT (RECOMMENDED)                     │
-└──────────────────────────────────────────────────────────────────────────────┘
+📋 DEPLOYMENT SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-cd /data/workspace/arb && ./deploy-minimal.sh
+✅ Files Created:
+   • src/api/client.ts         (API client for all backend endpoints)
+   • src/utils/mappers.ts      (Data mapping utilities)
+   • src/App.tsx               (Main app with ArbBot Pro layout)
+   • .env.production           (Production environment variables)
+   • deploy-ui-update.sh       (Automated deployment script)
 
+✅ Files Modified:
+   • src/main.jsx              (Updated to import App.tsx)
+   • src/index.css             (Added custom scrollbar styles)
+   • Dockerfile                (Added .env.production copy step)
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ OPTION 2: MANUAL STEP-BY-STEP DEPLOYMENT                                     │
-└──────────────────────────────────────────────────────────────────────────────┘
+✅ Components Reused (No Changes Needed):
+   • AccountPanel.tsx, Configuration.tsx, Header.tsx
+   • Monitoring.tsx, Logs.tsx, StatusLed.tsx
 
-# Step 1: Navigate to workspace
-cd /data/workspace/arb
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Step 2: Clean Slate - Delete All Existing Resources
-docker stop $(docker ps -aq) 2>/dev/null || true
-docker rm $(docker ps -aq) 2>/dev/null || true
-docker volume rm $(docker volume ls -q) 2>/dev/null || true
-docker network rm $(docker network ls -q) 2>/dev/null || true
-docker system prune -af --volumes
+🚀 ONE-COMMAND DEPLOYMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Step 3: Build All Images
-docker-compose -f minimal-docker-compose.yml build --no-cache
+ssh root@217.216.35.6
+cd /root/sportsbook-minimal
+git pull origin main
+chmod +x deploy-ui-update.sh
+./deploy-ui-update.sh
 
-# Step 4: Start All Services
-docker-compose -f minimal-docker-compose.yml up -d
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Step 5: Wait for Services to Initialize
-sleep 10
+🔍 MANUAL DEPLOYMENT STEPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Step 6: Check Status
-docker-compose -f minimal-docker-compose.yml ps
+1. Build Frontend:
+   cd /root/sportsbook-minimal/minimal-ui
+   npm install
+   npm run build
 
-# Step 7: Test API Health
-curl http://localhost:3001/api/system-health
+2. Rebuild Docker Container:
+   cd /root/sportsbook-minimal
+   docker compose build ui
+   docker compose up -d ui
 
+3. Verify Deployment:
+   docker logs arb-ui --tail 50
+   docker exec arb-ui ls -lh /usr/share/nginx/html/
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ OPTION 3: ALL-IN-ONE COMMAND (COPY & PASTE)                                  │
-└──────────────────────────────────────────────────────────────────────────────┘
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-cd /data/workspace/arb && docker stop $(docker ps -aq) 2>/dev/null || true && docker rm $(docker ps -aq) 2>/dev/null || true && docker volume rm $(docker volume ls -q) 2>/dev/null || true && docker network rm $(docker network ls -q) 2>/dev/null || true && docker system prune -af --volumes && docker-compose -f minimal-docker-compose.yml build --no-cache && docker-compose -f minimal-docker-compose.yml up -d && sleep 10 && docker-compose -f minimal-docker-compose.yml ps && curl -s http://localhost:3001/api/system-health | python3 -m json.tool
+🧪 VERIFICATION CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+Visual:
+  □ Open http://217.216.35.6:8080 in browser
+  □ ArbBot Pro header visible with status LEDs
+  □ Two account panels (A - Soft, B - Sharp) visible
+  □ Configuration panel renders completely
+  □ Daily P&L chart displays
+  □ Live Scanner table visible
+  □ Execution History table visible
+  □ System logs panel at bottom
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ AFTER DEPLOYMENT - ACCESS POINTS                                             │
-└──────────────────────────────────────────────────────────────────────────────┘
+Functional:
+  □ System status LEDs update every 5 seconds
+  □ Account pings update in real-time
+  □ Configuration saves and persists
+  □ "START TRADING" button responds
+  □ Logs update when actions occur
+  □ No console errors in browser DevTools (F12)
 
-🌐 UI:              http://localhost:3000
-🔌 API:             http://localhost:3001
-❤️  Health Check:   http://localhost:3001/api/system-health
-🔌 WebSocket:       ws://localhost:3001
+API Connectivity (Browser Console):
+  fetch('http://217.216.35.6:3000/api/system-health').then(r=>r.json()).then(console.log)
+  fetch('http://217.216.35.6:3000/api/login-status').then(r=>r.json()).then(console.log)
+  fetch('http://217.216.35.6:3000/api/settings').then(r=>r.json()).then(console.log)
+  fetch('http://217.216.35.6:3000/api/bets').then(r=>r.json()).then(console.log)
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ USEFUL COMMANDS AFTER DEPLOYMENT                                             │
-└──────────────────────────────────────────────────────────────────────────────┘
+🔧 BACKEND API ENDPOINTS REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# View all logs (real-time)
-docker-compose -f minimal-docker-compose.yml logs -f
+The frontend expects these endpoints to be implemented:
 
-# View specific service logs
-docker-compose -f minimal-docker-compose.yml logs -f api
-docker-compose -f minimal-docker-compose.yml logs -f worker
-docker-compose -f minimal-docker-compose.yml logs -f ui
+1. POST   /api/login          - Trigger login for accounts
+2. GET    /api/login-status   - Get worker login status & balances
+3. POST   /api/settings       - Save configuration
+4. GET    /api/settings       - Load configuration
+5. POST   /api/execute        - Execute arbitrage bet
+6. GET    /api/bets           - Get bet history
+7. GET    /api/system-health  - System health & ping status
 
-# Check service status
-docker-compose -f minimal-docker-compose.yml ps
+See .aider_context.md for detailed API specifications.
 
-# Restart all services
-docker-compose -f minimal-docker-compose.yml restart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Restart specific service
-docker-compose -f minimal-docker-compose.yml restart api
+🐛 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Stop all services
-docker-compose -f minimal-docker-compose.yml down
+Blank Page:
+  1. Check browser console (F12)
+  2. Verify build: docker exec arb-ui ls /usr/share/nginx/html/assets/
+  3. Rebuild: npm run build && docker compose build ui && docker compose up -d ui
 
-# Stop and remove volumes
-docker-compose -f minimal-docker-compose.yml down -v
+API Errors:
+  1. Check backend: docker ps | grep arb-engine
+  2. Test health: curl http://localhost:3000/health
+  3. Check logs: docker logs arb-engine --tail 100
 
-# Execute command in container
-docker-compose -f minimal-docker-compose.yml exec api sh
-docker-compose -f minimal-docker-compose.yml exec postgres psql -U arbuser -d arb_minimal
+Container Issues:
+  1. View logs: docker logs arb-ui --tail 100
+  2. Restart: docker compose restart ui
+  3. Rebuild: docker compose build ui && docker compose up -d ui
 
-# Check database
-docker-compose -f minimal-docker-compose.yml exec postgres psql -U arbuser -d arb_minimal -c "SELECT * FROM accounts;"
-docker-compose -f minimal-docker-compose.yml exec postgres psql -U arbuser -d arb_minimal -c "SELECT * FROM settings;"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+📦 ROLLBACK PROCEDURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ TESTING THE SYSTEM                                                            │
-└──────────────────────────────────────────────────────────────────────────────┘
+If issues occur, backups are created automatically at:
+/root/sportsbook-minimal/backups/ui-YYYYMMDD-HHMMSS/
 
-# 1. Open browser to UI
-xdg-open http://localhost:3000  # Linux
-# or manually navigate to http://localhost:3000
+To rollback:
+  BACKUP_DIR="/root/sportsbook-minimal/backups/ui-YYYYMMDD-HHMMSS"
+  cp -r "$BACKUP_DIR/src" /root/sportsbook-minimal/minimal-ui/
+  cd /root/sportsbook-minimal/minimal-ui && npm run build
+  cd /root/sportsbook-minimal && docker compose build ui && docker compose up -d ui
 
-# 2. Test API endpoints
-curl http://localhost:3001/api/system-health
-curl http://localhost:3001/api/login-status
-curl http://localhost:3001/api/settings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# 3. Test login (Account 1)
-curl -X POST http://localhost:3001/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"accountId": 1}'
+📊 ARCHITECTURE OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# 4. Test login (Account 2)
-curl -X POST http://localhost:3001/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"accountId": 2}'
+Browser (http://217.216.35.6:8080)
+    ↓
+arb-ui Container (Nginx)
+    ↓ API Calls (http://engine:3000)
+arb-engine Container (Node.js Backend)
+    ↓
+arb-postgres, arb-redis
 
-# 5. Start scanning
-curl -X POST http://localhost:3001/api/scan/start \
-  -H "Content-Type: application/json"
+Frontend Environment Variables:
+  • Docker Production: VITE_API_URL=http://engine:3000
+  • Local Development: VITE_API_URL=http://localhost:3000
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ TROUBLESHOOTING                                                               │
-└──────────────────────────────────────────────────────────────────────────────┘
+📚 DOCUMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# If ports are already in use
-sudo lsof -i :3000
-sudo lsof -i :3001
-sudo lsof -i :5432
-sudo lsof -i :6379
+Full Documentation:  FRONTEND_INTEGRATION_COMPLETE.md
+API Specification:   .aider_context.md
+Deployment Script:   deploy-ui-update.sh
 
-# Kill process on port
-sudo kill -9 $(sudo lsof -t -i:3000)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Check Docker disk space
-docker system df
+✅ STATUS: READY FOR DEPLOYMENT
 
-# Clean up Docker completely
-docker system prune -af --volumes
-
-# View container resource usage
-docker stats
-
-# Check network connectivity
-docker network ls
-docker network inspect arb_network
-
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ FILES CREATED (21 Total)                                                      │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-Root:
-  ✅ minimal-docker-compose.yml
-  ✅ minimal-db-init.sql
-  ✅ minimal-nginx.conf
-  ✅ deploy-minimal.sh
-  ✅ DEPLOY_COMMANDS.sh
-  ✅ MINIMAL_README.md
-  ✅ MINIMAL_FILES_SUMMARY.md
-  ✅ DEPLOYMENT_QUICKREF.txt (this file)
-
-minimal-api/:
-  ✅ Dockerfile
-  ✅ package.json
-  ✅ index.js
-
-minimal-worker/:
-  ✅ Dockerfile
-  ✅ requirements.txt
-  ✅ worker.py
-
-minimal-ui/:
-  ✅ Dockerfile
-  ✅ nginx.conf
-  ✅ package.json
-  ✅ vite.config.js
-  ✅ tailwind.config.js
-  ✅ postcss.config.js
-  ✅ index.html
-  ✅ src/main.jsx
-  ✅ src/App.jsx
-  ✅ src/index.css
-
+Created: December 9, 2025
+Repository: guntjong-max/arb
+Frontend: /root/sportsbook-minimal/minimal-ui
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                          🚀 READY TO DEPLOY! 🚀                              ║
-║                                                                              ║
-║  Choose one of the deployment options above and execute!                    ║
-║  System will be ready at http://localhost:3000 in ~2-3 minutes              ║
+║                          Deploy with: ./deploy-ui-update.sh                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
