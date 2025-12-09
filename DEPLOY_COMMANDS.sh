@@ -1,40 +1,32 @@
 #!/bin/bash
-# EXACT DEPLOYMENT COMMANDS - COPY & PASTE
 
-# ================================================
-# STEP 1: CLEAN SLATE (Delete All Existing)
-# ================================================
+# QUICK DEPLOYMENT COMMANDS
+# Copy these commands and run on the server at /root/sportsbook-minimal
 
-docker stop $(docker ps -aq) 2>/dev/null || true && \
-docker rm $(docker ps -aq) 2>/dev/null || true && \
-docker volume rm $(docker volume ls -q) 2>/dev/null || true && \
-docker network rm $(docker network ls -q) 2>/dev/null || true && \
-docker system prune -af --volumes
-
-# ================================================
-# STEP 2: BUILD EVERYTHING
-# ================================================
-
-cd /data/workspace/arb && \
-docker-compose -f minimal-docker-compose.yml build --no-cache
-
-# ================================================
-# STEP 3: START EVERYTHING
-# ================================================
-
-docker-compose -f minimal-docker-compose.yml up -d
-
-# ================================================
-# STEP 4: CHECK STATUS
-# ================================================
-
-sleep 10 && \
-echo "Checking services..." && \
-docker-compose -f minimal-docker-compose.yml ps && \
-echo "" && \
-echo "Testing API health..." && \
-curl -s http://localhost:3001/api/system-health | python3 -m json.tool && \
-echo "" && \
-echo "✅ DEPLOYMENT COMPLETE!" && \
-echo "UI: http://localhost:3000" && \
-echo "API: http://localhost:3001"
+echo "=== Quick Frontend Rebuild ==="
+echo ""
+echo "Run these commands on the server:"
+echo ""
+echo "cd /root/sportsbook-minimal"
+echo ""
+echo "# Download the rebuild script from repo (if not already there)"
+echo "# Or copy rebuild-frontend.sh to this directory"
+echo ""
+echo "# Make it executable"
+echo "chmod +x rebuild-frontend.sh"
+echo ""
+echo "# Run the rebuild"
+echo "./rebuild-frontend.sh"
+echo ""
+echo "=== OR Manual Commands ==="
+echo ""
+echo "cd /root/sportsbook-minimal"
+echo "docker compose stop arb-ui"
+echo "docker compose rm -f arb-ui"
+echo "docker rmi sportsbook-minimal-ui 2>/dev/null || true"
+echo "docker compose build --no-cache ui"
+echo "docker compose up -d ui"
+echo ""
+echo "# Verify"
+echo "docker exec arb-ui cat /usr/share/nginx/html/index.html | grep assets"
+echo ""
