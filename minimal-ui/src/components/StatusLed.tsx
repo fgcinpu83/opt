@@ -1,13 +1,26 @@
 import React from 'react';
+import { ConnectionStatus } from '../types';
 
 interface StatusLedProps {
-  healthy?: boolean;
+  status?: ConnectionStatus;
   label?: string;
 }
 
-export const StatusLed: React.FC<StatusLedProps> = ({ healthy = false, label = 'Status' }) => {
-  const colorClass = healthy ? 'bg-green-500' : 'bg-red-500';
-  const pulseClass = healthy ? 'animate-pulse' : '';
+export const StatusLed: React.FC<StatusLedProps> = ({ status, label = 'Status' }) => {
+  let colorClass = 'bg-gray-500';
+  let pulseClass = '';
+  
+  if (status === ConnectionStatus.CONNECTED) {
+    colorClass = 'bg-green-500';
+    pulseClass = 'animate-pulse';
+  } else if (status === ConnectionStatus.PROCESSING || status === ConnectionStatus.STANDBY) {
+    colorClass = 'bg-yellow-500';
+    pulseClass = 'animate-pulse';
+  } else if (status === ConnectionStatus.ERROR) {
+    colorClass = 'bg-red-500';
+  } else if (status === ConnectionStatus.DISCONNECTED) {
+    colorClass = 'bg-gray-600';
+  }
 
   return (
     <div className="flex items-center space-x-2">

@@ -25,13 +25,13 @@ export const Monitoring: React.FC<MonitoringProps> = ({
   initialBalance,
   currentBalance
 }) => {
-  const profit = currentBalance - initialBalance;
+  const profit = (currentBalance || 0) - (initialBalance || 0);
   const isProfitPositive = profit >= 0;
 
   // Chart data preparation
   const chartData = [
-    { name: 'Start', amount: initialBalance },
-    { name: 'Current', amount: currentBalance },
+    { name: 'Start', amount: initialBalance || 0 },
+    { name: 'Current', amount: currentBalance || 0 },
   ];
 
   return (
@@ -45,9 +45,9 @@ export const Monitoring: React.FC<MonitoringProps> = ({
            <div>
              <h3 className="text-xs font-bold text-gray-400 uppercase flex items-center"><TrendingUp className="w-3 h-3 mr-1" /> Daily P&L</h3>
              <div className={`text-2xl font-mono font-bold mt-2 ${isProfitPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-               {isProfitPositive ? '+' : ''}{profit.toFixed(2)} USD
+               {isProfitPositive ? '+' : ''}{(profit || 0).toFixed(2)} USD
              </div>
-             <p className="text-xs text-gray-500 mt-1">From initial {initialBalance}</p>
+             <p className="text-xs text-gray-500 mt-1">From initial {initialBalance || 0}</p>
            </div>
            
            <div className="h-32 w-full mt-4">
@@ -123,15 +123,15 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                       {/* Odds (2 Lines) */}
                       <td className="p-3 text-right align-middle">
                         <div className="flex flex-col font-mono">
-                           <span className="text-blue-400">{opp.oddsA.toFixed(2)}</span>
-                           <span className="text-orange-400">{opp.oddsB.toFixed(2)}</span>
+                           <span className="text-blue-400">{(opp?.oddsA || 0).toFixed(2)}</span>
+                           <span className="text-orange-400">{(opp?.oddsB || 0).toFixed(2)}</span>
                         </div>
                       </td>
 
                       {/* Profit */}
                       <td className="p-3 text-right align-middle">
                         <span className="font-mono font-bold text-emerald-400">
-                          {opp.profit.toFixed(2)}%
+                          {(opp?.profit || 0).toFixed(2)}%
                         </span>
                       </td>
                       
@@ -231,10 +231,10 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                       <td className="p-3 text-right align-middle">
                         <div className="flex flex-col">
                            <span className={`font-mono font-bold text-sm ${oddsColor}`}>
-                              {bet.odds.toFixed(2)}
+                              {(bet?.odds || 0).toFixed(2)}
                            </span>
                            <span className="text-xs text-gray-500 font-mono">
-                              {bet.line}
+                              {bet?.line || ''}
                            </span>
                         </div>
                       </td>
@@ -243,10 +243,10 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                       <td className="p-3 text-right align-middle">
                         <div className="flex flex-col">
                            <span className="font-mono text-emerald-400 font-bold">
-                              $ {bet.stake.toLocaleString()}
+                              $ {(bet?.stake || 0).toLocaleString()}
                            </span>
-                           {bet.profit ? (
-                             <span className="text-[9px] text-green-500 font-mono">+{bet.profit.toFixed(1)}</span>
+                           {bet?.profit ? (
+                             <span className="text-[9px] text-green-500 font-mono">+{(bet.profit || 0).toFixed(1)}</span>
                            ) : (
                              <span className="text-[9px] text-gray-600 font-mono">Stake</span>
                            )}

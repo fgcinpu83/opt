@@ -36,8 +36,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 {/* Ping */}
                 <div className="flex items-center space-x-1" title="Network Latency">
                     <Activity className="w-3 h-3 text-gray-600" />
-                    <span className={`text-xs font-mono font-bold ${ping < 100 ? 'text-green-500' : ping < 300 ? 'text-yellow-500' : 'text-red-500'}`}>
-                        {ping}ms
+                    <span className={`text-xs font-mono font-bold ${(ping || 0) < 100 ? 'text-green-500' : (ping || 0) < 300 ? 'text-yellow-500' : 'text-red-500'}`}>
+                        {ping || 0}ms
                     </span>
                 </div>
                 {/* Status LED */}
@@ -51,7 +51,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <Wallet className="w-3 h-3 mr-1.5" /> Balance
             </div>
             <div className="text-emerald-400 font-mono font-bold text-sm tracking-wide">
-                $ {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                $ {(balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </div>
         </div>
       </div>

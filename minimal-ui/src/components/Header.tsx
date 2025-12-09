@@ -26,10 +26,10 @@ export const Header: React.FC<HeaderProps> = ({ health, totalBalance }) => {
 
         {/* Status Bar */}
         <div className="flex flex-wrap justify-center gap-3">
-          <StatusLed label="ENGINE API" status={health.engineApi} />
-          <StatusLed label="DATABASE" status={health.database} />
-          <StatusLed label="REDIS" status={health.redis} />
-          <StatusLed label="WORKER" status={health.worker} />
+          <StatusLed label="ENGINE API" status={health?.engineApi} />
+          <StatusLed label="DATABASE" status={health?.database} />
+          <StatusLed label="REDIS" status={health?.redis} />
+          <StatusLed label="WORKER" status={health?.worker} />
         </div>
         
         {/* Secure Mode & Balance */}
@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ health, totalBalance }) => {
              <div className="text-right">
                 <span className="block text-[10px] text-gray-500 leading-none">Total Balance</span>
                 <span className="block text-sm font-mono font-bold text-white leading-none mt-1">
-                  $ {totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  $ {(totalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
              </div>
           </div>

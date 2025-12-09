@@ -14,6 +14,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
   };
 
   const updateMarket = (key: keyof BetConfig['markets']) => {
+    if (!config || !config.markets) return;
     onChange({
       ...config,
       markets: {
@@ -50,7 +51,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
               <span className="absolute text-[10px] top-1 left-2 text-gray-500">Tier 1 (Big)</span>
               <input 
                 type="number" 
-                value={config.tier1}
+                value={config?.tier1 || 0}
                 onChange={(e) => updateConfig('tier1', parseFloat(e.target.value))}
                 className="w-full bg-gray-950 border border-gray-700 text-right text-gray-200 text-sm rounded px-2 pt-5 pb-1 focus:border-indigo-500 focus:outline-none" 
               />
@@ -59,7 +60,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
               <span className="absolute text-[10px] top-1 left-2 text-gray-500">Tier 2 (Mid)</span>
               <input 
                 type="number" 
-                value={config.tier2}
+                value={config?.tier2 || 0}
                 onChange={(e) => updateConfig('tier2', parseFloat(e.target.value))}
                 className="w-full bg-gray-950 border border-gray-700 text-right text-gray-200 text-sm rounded px-2 pt-5 pb-1 focus:border-indigo-500 focus:outline-none" 
               />
@@ -68,7 +69,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
               <span className="absolute text-[10px] top-1 left-2 text-gray-500">Tier 3 (Small)</span>
               <input 
                 type="number" 
-                value={config.tier3}
+                value={config?.tier3 || 0}
                 onChange={(e) => updateConfig('tier3', parseFloat(e.target.value))}
                 className="w-full bg-gray-950 border border-gray-700 text-right text-gray-200 text-sm rounded px-2 pt-5 pb-1 focus:border-indigo-500 focus:outline-none" 
               />
@@ -82,14 +83,14 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
            <div className="flex items-center space-x-2">
             <input 
               type="number" 
-              value={config.minProfit}
+              value={config?.minProfit || 0}
               onChange={(e) => updateConfig('minProfit', parseFloat(e.target.value))}
               className="w-1/2 bg-gray-950 border border-gray-700 text-center text-gray-200 text-sm rounded p-2 focus:border-green-500 focus:outline-none" 
             />
             <span className="text-gray-600">-</span>
             <input 
               type="number" 
-              value={config.maxProfit}
+              value={config?.maxProfit || 0}
               onChange={(e) => updateConfig('maxProfit', parseFloat(e.target.value))}
               className="w-1/2 bg-gray-950 border border-gray-700 text-center text-gray-200 text-sm rounded p-2 focus:border-green-500 focus:outline-none" 
             />
@@ -104,7 +105,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
                 <span className="text-xs text-gray-500">HT</span>
                 <input 
                   type="number" 
-                  value={config.maxMinuteHT} 
+                  value={config?.maxMinuteHT || 0} 
                   onChange={(e) => updateConfig('maxMinuteHT', parseInt(e.target.value))}
                   className="w-12 bg-transparent text-right text-sm outline-none" 
                 />
@@ -113,7 +114,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
                 <span className="text-xs text-gray-500">FT</span>
                 <input 
                   type="number" 
-                  value={config.maxMinuteFT} 
+                  value={config?.maxMinuteFT || 0} 
                   onChange={(e) => updateConfig('maxMinuteFT', parseInt(e.target.value))}
                   className="w-12 bg-transparent text-right text-sm outline-none" 
                 />
@@ -129,7 +130,7 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
               <button
                 key={type}
                 onClick={() => updateConfig('matchFilter', type)}
-                className={`flex-1 py-1.5 text-[10px] font-bold rounded ${config.matchFilter === type ? 'bg-indigo-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`flex-1 py-1.5 text-[10px] font-bold rounded ${config?.matchFilter === type ? 'bg-indigo-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
               >
                 {type}
               </button>
@@ -143,13 +144,13 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
           <div className="grid grid-cols-2 gap-2">
             {marketOptions.map((market) => (
                <label key={market.id} className="flex items-center space-x-2 cursor-pointer group">
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.markets[market.id] ? 'bg-indigo-600 border-indigo-600' : 'border-gray-600 bg-gray-950'}`}>
-                    {config.markets[market.id] && <div className="w-2 h-2 bg-white rounded-sm" />}
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config?.markets?.[market.id] ? 'bg-indigo-600 border-indigo-600' : 'border-gray-600 bg-gray-950'}`}>
+                    {config?.markets?.[market.id] && <div className="w-2 h-2 bg-white rounded-sm" />}
                   </div>
                   <input 
                     type="checkbox" 
                     className="hidden" 
-                    checked={config.markets[market.id]}
+                    checked={config?.markets?.[market.id] || false}
                     onChange={() => updateMarket(market.id)}
                   />
                   <span className="text-xs text-gray-300 group-hover:text-white">{market.label}</span>
