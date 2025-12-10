@@ -168,24 +168,24 @@ const App: React.FC = () => {
     try {
       const settings = await apiClient.getSettings();
       
-      // Map backend settings to UI config
+      // Map backend settings to UI config format
       const mappedConfig: BetConfig = {
-        tier1: config.tier1, // Backend doesn't store tiers
+        tier1: config.tier1, // Backend doesn't store tiers, use current values
         tier2: config.tier2,
         tier3: config.tier3,
-        minProfit: settings.min_percent,
-        maxProfit: settings.max_percent,
-        maxMinuteHT: settings.minute_limit_ht,
-        maxMinuteFT: settings.minute_limit_ft,
+        minProfit: settings.min_percentage || 0,
+        maxProfit: settings.max_percentage || 0,
+        maxMinuteHT: settings.ht_time_last_bet || 0,
+        maxMinuteFT: settings.ft_time_last_bet || 0,
         matchFilter: settings.match_filter === 'live_only' ? 'LIVE' : 
                      settings.match_filter === 'prematch_only' ? 'PREMATCH' : 'MIXED',
         markets: {
-          ftHdp: settings.market_filter.ft_hdp,
-          ftOu: settings.market_filter.ft_ou,
-          ft1x2: settings.market_filter.ft_1x2,
-          htHdp: settings.market_filter.ht_hdp,
-          htOu: settings.market_filter.ht_ou,
-          ht1x2: settings.market_filter.ht_1x2,
+          ftHdp: settings.ft_hdp || false,
+          ftOu: settings.ft_ou || false,
+          ft1x2: settings.ft_1x2 || false,
+          htHdp: settings.ht_hdp || false,
+          htOu: settings.ht_ou || false,
+          ht1x2: settings.ht_1x2 || false,
         },
       };
       
@@ -200,22 +200,20 @@ const App: React.FC = () => {
   // Save settings to backend
   const saveSettings = useCallback(async (newConfig: BetConfig) => {
     try {
+      // Map frontend config to backend expected field names
       const backendSettings = {
-        min_percent: newConfig.minProfit,
-        max_percent: newConfig.maxProfit,
-        minute_limit_ht: newConfig.maxMinuteHT,
-        minute_limit_ft: newConfig.maxMinuteFT,
-        market_filter: {
-          ft_hdp: newConfig.markets.ftHdp,
-          ft_ou: newConfig.markets.ftOu,
-          ft_1x2: newConfig.markets.ft1x2,
-          ht_hdp: newConfig.markets.htHdp,
-          ht_ou: newConfig.markets.htOu,
-          ht_1x2: newConfig.markets.ht1x2,
-        },
-        match_filter: newConfig.matchFilter === 'LIVE' ? 'live_only' as const : 
-                      newConfig.matchFilter === 'PREMATCH' ? 'prematch_only' as const : 'all' as const,
-        round_off: 5, // Default round off
+        min_percentage: newConfig.minProfit,
+        max_percentage: newConfig.maxProfit,
+        ht_time_last_bet: newConfig.maxMinuteHT,
+        ft_time_last_bet: newConfig.maxMinuteFT,
+        match_filter: newConfig.matchFilter === 'LIVE' ? 'live_only' : 
+                      newConfig.matchFilter === 'PREMATCH' ? 'prematch_only' : 'all',
+        ft_hdp: newConfig.markets.ftHdp,
+        ft_ou: newConfig.markets.ftOu,
+        ft_1x2: newConfig.markets.ft1x2,
+        ht_hdp: newConfig.markets.htHdp,
+        ht_ou: newConfig.markets.htOu,
+        ht_1x2: newConfig.markets.ht1x2,
       };
 
       await apiClient.saveSettings(backendSettings);

@@ -18,20 +18,17 @@ interface LoginStatusWorker {
 }
 
 interface SettingsPayload {
-  min_percent: number;
-  max_percent: number;
-  minute_limit_ht: number;
-  minute_limit_ft: number;
-  market_filter: {
-    ft_hdp: boolean;
-    ft_ou: boolean;
-    ft_1x2: boolean;
-    ht_hdp: boolean;
-    ht_ou: boolean;
-    ht_1x2: boolean;
-  };
-  match_filter: 'live_only' | 'prematch_only' | 'all';
-  round_off: number;
+  min_percentage: number;
+  max_percentage: number;
+  ht_time_last_bet: number;
+  ft_time_last_bet: number;
+  match_filter: string;
+  ft_hdp: boolean;
+  ft_ou: boolean;
+  ft_1x2: boolean;
+  ht_hdp: boolean;
+  ht_ou: boolean;
+  ht_1x2: boolean;
 }
 
 interface ExecuteBetPayload {
