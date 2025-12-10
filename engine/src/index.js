@@ -5,6 +5,7 @@ const { createServer } = require('./server');
 const { connectDatabase } = require('./config/database');
 const { connectRedis } = require('./config/redis');
 const { initializeMetrics } = require('./utils/metrics');
+const { initializeWebSocket, closeWebSocket } = require('./websocket/opportunities.ws');
 
 let server;
 let httpServer;
@@ -50,10 +51,16 @@ async function start() {
       console.log(`📍 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API docs: http://localhost:${PORT}/api/docs`);
       console.log(`🔌 API base: http://localhost:${PORT}/api/v1`);
+      console.log(`🌐 WebSocket: ws://localhost:${PORT}/ws/opportunities`);
       console.log('═══════════════════════════════════════════════════════');
       logger.info(`Engine HTTP Server listening on port ${PORT}`);
       logger.info(`Health check: http://localhost:${PORT}/health`);
       logger.info(`API docs: http://localhost:${PORT}/api/docs`);
+      
+      // Initialize WebSocket server after HTTP server is listening
+      initializeWebSocket(httpServer);
+      console.log('✅ WebSocket server initialized');
+      logger.info('WebSocket server initialized on /ws/opportunities');
     });
 
     // Graceful shutdown handlers
@@ -72,6 +79,10 @@ async function start() {
       const { closeRedis } = require('./config/redis');
       
       try {
+        // Close WebSocket server first
+        closeWebSocket();
+        logger.info('WebSocket server closed');
+        
         await closeDatabase();
         logger.info('Database connection closed');
         
