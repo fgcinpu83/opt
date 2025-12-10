@@ -34,23 +34,47 @@ export interface BetConfig {
 
 export interface LiveOpp {
   id: string;
-  match: string;
-  league: string;
-  market: string;
-  line: string;
-  oddsA: number;
-  oddsB: number;
-  profit: number;
   time: string;
+  profit: number;
+  legs: [
+    {
+      site: string;
+      match: {
+        home: string;
+        away: string;
+      };
+      league: string;
+      market: string;
+      pick: string;
+      odds: number;
+    },
+    {
+      site: string;
+      match: {
+        home: string;
+        away: string;
+      };
+      league: string;
+      market: string;
+      pick: string;
+      odds: number;
+    }
+  ];
 }
 
 export interface BetHistory {
   id: string;
   time: string;
-  match: string;
-  market: string;
+  match: {
+    home: string;
+    away: string;
+  };
+  provider: string;
+  pairSite: string;
+  type: string;
   pick: string;
   odds: number;
+  pairOdds: number;
   line: string;
   stake: number;
   status: 'ACCEPTED' | 'RUNNING' | 'REJECTED';

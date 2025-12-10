@@ -11,14 +11,6 @@ interface MonitoringProps {
   currentBalance: number;
 }
 
-const getTeams = (match: string) => {
-  const parts = match.split(/ vs /i);
-  if (parts.length >= 2) {
-    return { home: parts[0], away: parts[1] };
-  }
-  return { home: match, away: '' };
-};
-
 export const Monitoring: React.FC<MonitoringProps> = ({ 
   scannerData, 
   historyData, 
@@ -92,7 +84,9 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                    </tr>
                 ) : (
                   scannerData.map((opp) => {
-                    const { home, away } = getTeams(opp.match);
+                    const home = opp.legs[0]?.match?.home || 'Home Team';
+                    const away = opp.legs[0]?.match?.away || 'Away Team';
+                    const league = opp.legs[0]?.league || 'League';
                     return (
                     <tr key={opp.id} className="hover:bg-slate-800/30 transition-colors">
                       {/* Time */}
@@ -108,23 +102,23 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                         <div className="flex flex-col space-y-0.5">
                           <span className="font-bold text-slate-200 text-xs">{home}</span>
                           <span className="font-bold text-slate-400 text-xs">{away}</span>
-                          <span className="text-[9px] text-slate-500 uppercase mt-0.5">{opp.league}</span>
+                          <span className="text-[9px] text-slate-500 uppercase mt-0.5">{league}</span>
                         </div>
                       </td>
 
                       {/* Type / Market (2 Lines) */}
                       <td className="py-2 px-3 align-middle">
                         <div className="flex flex-col">
-                           <span className="text-indigo-400 font-bold">{opp.market}</span>
-                           <span className="text-slate-500 font-mono">{opp.line}</span>
+                           <span className="text-indigo-400 font-bold">{opp.legs[0]?.market || ''}</span>
+                           <span className="text-slate-500 font-mono">{opp.legs[0]?.pick || ''}</span>
                         </div>
                       </td>
 
                       {/* Odds (2 Lines) */}
                       <td className="py-2 px-3 text-right align-middle">
                         <div className="flex flex-col font-mono text-xs">
-                           <span className="text-blue-400">{(opp?.oddsA || 0).toFixed(2)}</span>
-                           <span className="text-orange-400">{(opp?.oddsB || 0).toFixed(2)}</span>
+                           <span className="text-blue-400">{(opp.legs[0]?.odds || 0).toFixed(2)}</span>
+                           <span className="text-orange-400">{(opp.legs[1]?.odds || 0).toFixed(2)}</span>
                         </div>
                       </td>
 
@@ -191,7 +185,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                     statusText = 'REJECTED';
                   }
                   
-                  const { home, away } = getTeams(bet.match);
+                  const { home, away } = bet.match ? { home: bet.match.home, away: bet.match.away } : { home: '', away: '' };
                   const isHomeOrOver = bet.pick.includes('Home') || bet.pick.includes('Over');
                   const oddsColor = isHomeOrOver ? 'text-blue-400' : 'text-orange-400';
 
@@ -220,7 +214,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({
                       {/* Type Column (Market + Pick) */}
                       <td className="py-2 px-3 align-middle">
                          <div className="flex flex-col">
-                            <span className="text-indigo-400 font-bold">{bet.market}</span>
+                            <span className="text-indigo-400 font-bold">{bet.type}</span>
                             <span className="text-xs text-slate-400 font-medium">
                                {bet.pick}
                             </span>

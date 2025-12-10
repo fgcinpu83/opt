@@ -39,10 +39,7 @@ export const LiveScanner: React.FC<LiveScannerProps> = ({ data }) => {
                                     <tr className="bg-gray-900/50 hover:bg-gray-800/30 transition-colors border-b-0">
                                         <td className="p-2 pl-3 font-mono text-gray-500 border-b border-gray-800" rowSpan={2}>{opp.time}</td>
                                         <td className="p-2 font-bold text-gray-300">{opp.legs[0].site}</td>
-                                        <td className="p-2 text-gray-300"><div className="flex flex-col">
-                                            <div>{opp.legs[0].match.home}</div>
-                                            <div className="text-gray-500">{opp.legs[0].match.away}</div>
-                                        </div></td>
+                                        <td className="p-2 text-gray-300">{opp.legs[0].match.home}</td>
                                         <td className="p-2 text-indigo-300">{opp.legs[0].market} {opp.legs[0].pick}</td>
                                         <td className="p-2 text-right font-mono text-blue-400">{opp.legs[0].odds.toFixed(2)}</td>
                                         <td className="p-2 text-center font-mono font-bold text-emerald-400 border-b border-gray-800 align-middle" rowSpan={2}>
@@ -53,8 +50,8 @@ export const LiveScanner: React.FC<LiveScannerProps> = ({ data }) => {
                                     </tr>
                                     {/* Second Leg */}
                                     <tr className="bg-gray-900/50 hover:bg-gray-800/30 transition-colors">
-                                        <td className="p-2 font-bold text-gray-300 border-b border-gray-800"></td>
-                                        <td className="p-2 text-gray-300 border-b border-gray-800"></td>
+                                        <td className="p-2 font-bold text-gray-300 border-b border-gray-800">{opp.legs[1].site}</td>
+                                        <td className="p-2 text-gray-300 border-b border-gray-800">{opp.legs[1].match.away}</td>
                                         <td className="p-2 text-indigo-300 border-b border-gray-800">{opp.legs[1].market} {opp.legs[1].pick}</td>
                                         <td className="p-2 text-right font-mono text-orange-400 border-b border-gray-800">{opp.legs[1].odds.toFixed(2)}</td>
                                     </tr>

@@ -7,14 +7,26 @@ export function mapBetHistoryToUI(backendBet: BetHistoryItem): BetHistory {
   const timestamp = new Date(backendBet.timestamp * 1000);
   const timeStr = timestamp.toLocaleTimeString('en-GB', { hour12: false });
   
+  // Parse match_id to extract team names if available, otherwise use placeholder
+  const matchId = backendBet.match_id || 'Unknown Match';
+  const teams = matchId.includes(' vs ') 
+    ? matchId.split(' vs ') 
+    : ['Team A', 'Team B'];
+  
   return {
     id: backendBet.pair_id,
     time: timeStr,
-    match: `Match ${backendBet.match_id}`, // Backend doesn't provide team names, use match_id
-    market: `${backendBet.market} ${backendBet.type}`.toUpperCase(),
+    match: {
+      home: teams[0] || 'Home Team',
+      away: teams[1] || 'Away Team',
+    },
+    provider: backendBet.provider,
+    pairSite: backendBet.provider, // TODO: Get actual pair site from backend
+    type: `${backendBet.market} ${backendBet.type}`.toUpperCase(),
     line: '0.0', // Backend doesn't provide line in history
     pick: backendBet.side.charAt(0).toUpperCase() + backendBet.side.slice(1),
     odds: backendBet.odds,
+    pairOdds: backendBet.odds, // TODO: Get actual pair odds from backend
     stake: backendBet.stake,
     status: backendBet.result === 'accepted' ? 'ACCEPTED' : backendBet.result === 'rejected' ? 'REJECTED' : 'RUNNING',
     site: backendBet.provider,
