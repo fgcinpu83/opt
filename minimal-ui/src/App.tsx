@@ -4,6 +4,7 @@ import { AccountPanel } from './components/AccountPanel';
 import { Configuration } from './components/Configuration';
 import { Monitoring } from './components/Monitoring';
 import { Logs } from './components/Logs';
+import { DailyPnL } from './components/DailyPnL';
 import { apiClient } from './api/client';
 import { 
   mapBetHistoryToUI, 
@@ -308,19 +309,19 @@ const App: React.FC = () => {
   // --- RENDER ---
 
   return (
-    <div className="min-h-screen bg-gray-950 text-slate-200 font-sans pb-8">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans">
       
-      <Header health={health} totalBalance={account1.balance + account2.balance} />
+      <Header health={health} />
 
-      <main className="max-w-7xl mx-auto p-4 space-y-4">
+      <main className="max-w-[1920px] mx-auto p-3 lg:p-4">
         
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4">
           
-          {/* Left Column: Accounts & Config (3 cols) */}
-          <div className="lg:col-span-3 space-y-4 flex flex-col">
+          {/* LEFT COLUMN: Account & Config */}
+          <div className="lg:col-span-3 space-y-3 lg:space-y-4">
             {/* Account Panel 1 */}
             <AccountPanel 
-              label="Account A (Soft)" 
+              label="ACCOUNT 1" 
               initialSportsbook="nova88/saba"
               balance={account1.balance}
               isConnected={account1.isConnected} 
@@ -331,7 +332,7 @@ const App: React.FC = () => {
             
             {/* Account Panel 2 */}
             <AccountPanel 
-              label="Account B (Sharp)" 
+              label="ACCOUNT 2" 
               initialSportsbook="qq188/s bet"
               balance={account2.balance}
               isConnected={account2.isConnected} 
@@ -340,22 +341,29 @@ const App: React.FC = () => {
               onToggleBot={toggleAccount2}
             />
             
-            <div className="flex-1">
-              <Configuration config={config} onChange={handleConfigChange} />
-            </div>
+            <Configuration config={config} onChange={handleConfigChange} />
           </div>
 
-          {/* Right Column: Monitoring & Logs (9 cols) */}
-          <div className="lg:col-span-9 space-y-4 flex flex-col">
-            <div className="flex-1">
-              <Monitoring 
-                scannerData={scannerData} 
-                historyData={historyData}
-                initialBalance={initialBalance}
-                currentBalance={account1.balance + account2.balance}
-              />
-            </div>
-            <div className="h-64">
+          {/* MIDDLE COLUMN: Execution & Live Scanner */}
+          <div className="lg:col-span-6 space-y-3 lg:space-y-4">
+            <Monitoring 
+              scannerData={scannerData} 
+              historyData={historyData}
+              initialBalance={initialBalance}
+              currentBalance={account1.balance + account2.balance}
+            />
+          </div>
+
+          {/* RIGHT COLUMN: P&L and Logs */}
+          <div className="lg:col-span-3 space-y-3 lg:space-y-4">
+            {/* Daily P&L Card */}
+            <DailyPnL 
+              initialBalance={initialBalance}
+              currentBalance={account1.balance + account2.balance}
+            />
+            
+            {/* System Logs */}
+            <div className="h-[500px] lg:h-[600px]">
               <Logs logs={logs} />
             </div>
           </div>

@@ -5,10 +5,9 @@ import { SystemHealth } from '../types';
 
 interface HeaderProps {
   health: SystemHealth;
-  totalBalance: number;
 }
 
-export const Header: React.FC<HeaderProps> = ({ health, totalBalance }) => {
+export const Header: React.FC<HeaderProps> = ({ health }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50 shadow-lg">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -32,21 +31,12 @@ export const Header: React.FC<HeaderProps> = ({ health, totalBalance }) => {
           <StatusLed label="WORKER" status={health?.worker} />
         </div>
         
-        {/* Secure Mode & Balance */}
-        <div className="hidden md:flex items-center">
-          <div className="flex items-center space-x-3 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 shadow-inner">
-             <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Secure Mode</span>
-             </div>
-             <div className="w-px h-4 bg-slate-800"></div>
-             <div className="text-right">
-                <span className="block text-[10px] text-slate-500 leading-none">Total Balance</span>
-                <span className="block text-sm font-mono font-bold text-white leading-none mt-1">
-                  $ {(totalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-             </div>
-          </div>
+        {/* Secure Mode Button */}
+        <div className="flex items-center">
+          <button className="flex items-center space-x-2 bg-slate-950 px-4 py-2.5 rounded-lg border border-slate-800 shadow-inner hover:border-emerald-500/50 transition-colors">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">Secure Mode</span>
+          </button>
         </div>
       </div>
     </header>
