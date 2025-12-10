@@ -111,7 +111,27 @@ app.get('/api/settings', async (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
   try {
-    const {
+    // ===== FAILSAFE: Debug log to see what frontend sends =====
+    console.log("RECEIVED CONFIG PAYLOAD:", req.body);
+    
+    // ===== FAILSAFE: Accept multiple field name variations =====
+    // Support camelCase, snake_case, and various naming conventions
+    const min_percentage = req.body.min_percentage || req.body.minPercentage || req.body.min_percent || req.body.minProfit || 0;
+    const max_percentage = req.body.max_percentage || req.body.maxPercentage || req.body.max_percent || req.body.maxProfit || 10;
+    const ht_time_last_bet = req.body.ht_time_last_bet || req.body.htTimeLastBet || req.body.minute_limit_ht || req.body.maxMinuteHT || 35;
+    const ft_time_last_bet = req.body.ft_time_last_bet || req.body.ftTimeLastBet || req.body.minute_limit_ft || req.body.maxMinuteFT || 75;
+    const match_filter = req.body.match_filter || req.body.matchFilter || 'all';
+    
+    // Market filters - accept both flat and nested formats
+    const markets = req.body.markets || {};
+    const ft_hdp = req.body.ft_hdp ?? req.body.ftHdp ?? markets.ftHdp ?? true;
+    const ft_ou = req.body.ft_ou ?? req.body.ftOu ?? markets.ftOu ?? true;
+    const ft_1x2 = req.body.ft_1x2 ?? req.body.ft1x2 ?? markets.ft1x2 ?? false;
+    const ht_hdp = req.body.ht_hdp ?? req.body.htHdp ?? markets.htHdp ?? true;
+    const ht_ou = req.body.ht_ou ?? req.body.htOu ?? markets.htOu ?? true;
+    const ht_1x2 = req.body.ht_1x2 ?? req.body.ht1x2 ?? markets.ht1x2 ?? false;
+    
+    console.log("MAPPED VALUES:", {
       min_percentage,
       max_percentage,
       ht_time_last_bet,
@@ -123,7 +143,7 @@ app.post('/api/settings', async (req, res) => {
       ht_hdp,
       ht_ou,
       ht_1x2
-    } = req.body;
+    });
     
     await pool.query(`
       UPDATE settings SET
@@ -142,9 +162,11 @@ app.post('/api/settings', async (req, res) => {
       WHERE id = 1
     `, [min_percentage, max_percentage, ht_time_last_bet, ft_time_last_bet, match_filter, ft_hdp, ft_ou, ft_1x2, ht_hdp, ht_ou, ht_1x2]);
     
-    res.json({ success: true });
+    console.log("✅ Settings saved successfully to database");
+    
+    res.json({ success: true, message: 'Settings saved successfully' });
   } catch (error) {
-    console.error('Update settings error:', error);
+    console.error('❌ Update settings error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -106,12 +106,35 @@ router.post('/tiers', async (req, res) => {
 
 /**
  * POST /api/v1/config/profit
- * Update profit settings
+ * Update profit settings (FAILSAFE version)
  */
 router.post('/profit', async (req, res) => {
   try {
-    const { user_id = 1, min_profit_percentage, max_profit_percentage,
-            max_minute_ht, max_minute_ft, match_filter, enabled_markets } = req.body;
+    // ===== FAILSAFE: Debug log =====
+    console.log("RECEIVED PROFIT CONFIG PAYLOAD:", req.body);
+    
+    // ===== FAILSAFE: Accept multiple field name variations =====
+    const user_id = req.body.user_id || 1;
+    const min_profit_percentage = req.body.min_profit_percentage || req.body.minProfitPercentage || 
+                                   req.body.min_percentage || req.body.minPercentage || req.body.minProfit || 0;
+    const max_profit_percentage = req.body.max_profit_percentage || req.body.maxProfitPercentage || 
+                                   req.body.max_percentage || req.body.maxPercentage || req.body.maxProfit || 10;
+    const max_minute_ht = req.body.max_minute_ht || req.body.maxMinuteHt || req.body.maxMinuteHT || 
+                          req.body.ht_time_last_bet || req.body.htTimeLastBet || req.body.minute_limit_ht || 35;
+    const max_minute_ft = req.body.max_minute_ft || req.body.maxMinuteFt || req.body.maxMinuteFT || 
+                          req.body.ft_time_last_bet || req.body.ftTimeLastBet || req.body.minute_limit_ft || 75;
+    const match_filter = req.body.match_filter || req.body.matchFilter || 'all';
+    const enabled_markets = req.body.enabled_markets || req.body.enabledMarkets || req.body.markets;
+
+    console.log("MAPPED PROFIT VALUES:", {
+      user_id,
+      min_profit_percentage,
+      max_profit_percentage,
+      max_minute_ht,
+      max_minute_ft,
+      match_filter,
+      enabled_markets
+    });
 
     const query = `
       INSERT INTO profit_config (
@@ -143,6 +166,7 @@ router.post('/profit', async (req, res) => {
     ]);
 
     logger.info('Profit configuration updated', { user_id, config: result.rows[0] });
+    console.log("✅ Profit config saved:", result.rows[0]);
 
     res.json({
       success: true,
@@ -151,7 +175,8 @@ router.post('/profit', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Update profit config error', { error: error.message });
+    logger.error('Update profit config error', { error: error.message, stack: error.stack });
+    console.error('❌ Update profit config error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -196,43 +221,103 @@ router.get('/system', async (req, res) => {
 
 /**
  * POST /api/v1/config/system
- * Set system configuration value
+ * Set system configuration value (FAILSAFE version)
  */
 router.post('/system', async (req, res) => {
   try {
-    const { user_id = 1, config_key, config_value } = req.body;
+    // ===== FAILSAFE: Debug log to see what frontend sends =====
+    console.log("RECEIVED CONFIG PAYLOAD:", req.body);
+    
+    // ===== FAILSAFE: Remove strict validation - accept any format =====
+    const user_id = req.body.user_id || 1;
+    
+    // Handle both single config_key/config_value format AND bulk config object
+    if (req.body.config_key && req.body.config_value !== undefined) {
+      // Single key-value format
+      const query = `
+        INSERT INTO system_config (user_id, config_key, config_value)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, config_key)
+        DO UPDATE SET
+          config_value = EXCLUDED.config_value,
+          updated_at = NOW()
+        RETURNING *
+      `;
 
-    if (!config_key || config_value === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: 'config_key and config_value are required'
+      const result = await db.query(query, [
+        user_id,
+        req.body.config_key,
+        JSON.stringify(req.body.config_value)
+      ]);
+
+      console.log("✅ Single config saved:", result.rows[0]);
+
+      res.json({
+        success: true,
+        message: 'System configuration updated',
+        config: result.rows[0]
+      });
+    } else {
+      // ===== FAILSAFE: Bulk config update - accept all possible field name variations =====
+      const configMapping = {
+        'min_profit': req.body.min_profit || req.body.min_percentage || req.body.minPercentage || req.body.minProfit,
+        'max_profit': req.body.max_profit || req.body.max_percentage || req.body.maxPercentage || req.body.maxProfit,
+        'min_odds': req.body.min_odds || req.body.minOdds,
+        'max_odds': req.body.max_odds || req.body.maxOdds,
+        'max_stake': req.body.max_stake || req.body.maxStake,
+        'scan_interval': req.body.scan_interval || req.body.scanInterval,
+        'ht_time_last_bet': req.body.ht_time_last_bet || req.body.htTimeLastBet || req.body.minute_limit_ht || req.body.maxMinuteHT,
+        'ft_time_last_bet': req.body.ft_time_last_bet || req.body.ftTimeLastBet || req.body.minute_limit_ft || req.body.maxMinuteFT,
+        'match_filter': req.body.match_filter || req.body.matchFilter,
+        // Market filters
+        'ft_hdp': req.body.ft_hdp ?? req.body.ftHdp ?? req.body.markets?.ftHdp,
+        'ft_ou': req.body.ft_ou ?? req.body.ftOu ?? req.body.markets?.ftOu,
+        'ft_1x2': req.body.ft_1x2 ?? req.body.ft1x2 ?? req.body.markets?.ft1x2,
+        'ht_hdp': req.body.ht_hdp ?? req.body.htHdp ?? req.body.markets?.htHdp,
+        'ht_ou': req.body.ht_ou ?? req.body.htOu ?? req.body.markets?.htOu,
+        'ht_1x2': req.body.ht_1x2 ?? req.body.ht1x2 ?? req.body.markets?.ht1x2,
+      };
+
+      console.log("MAPPED CONFIG VALUES:", configMapping);
+
+      // Insert/Update all config values
+      const savedConfigs = [];
+      for (const [key, value] of Object.entries(configMapping)) {
+        if (value !== undefined && value !== null) {
+          const query = `
+            INSERT INTO system_config (user_id, config_key, config_value)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, config_key)
+            DO UPDATE SET
+              config_value = EXCLUDED.config_value,
+              updated_at = NOW()
+            RETURNING *
+          `;
+
+          const result = await db.query(query, [
+            user_id,
+            key,
+            JSON.stringify(value)
+          ]);
+          
+          savedConfigs.push(result.rows[0]);
+        }
+      }
+
+      logger.info('Bulk system configuration updated', { user_id, count: savedConfigs.length });
+      console.log("✅ Bulk configs saved:", savedConfigs.length, "items");
+
+      res.json({
+        success: true,
+        message: 'System configuration updated successfully',
+        count: savedConfigs.length,
+        configs: savedConfigs
       });
     }
 
-    const query = `
-      INSERT INTO system_config (user_id, config_key, config_value)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id, config_key)
-      DO UPDATE SET
-        config_value = EXCLUDED.config_value,
-        updated_at = NOW()
-      RETURNING *
-    `;
-
-    const result = await db.query(query, [
-      user_id,
-      config_key,
-      JSON.stringify(config_value)
-    ]);
-
-    res.json({
-      success: true,
-      message: 'System configuration updated',
-      config: result.rows[0]
-    });
-
   } catch (error) {
-    logger.error('Set system config error', { error: error.message });
+    logger.error('Set system config error', { error: error.message, stack: error.stack });
+    console.error('❌ Set system config error:', error);
     res.status(500).json({
       success: false,
       error: error.message
