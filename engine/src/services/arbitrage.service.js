@@ -1,4 +1,6 @@
 const logger = require('../config/logger');
+const { detectTier } = require('../utils/tier');
+const { MAX_ARBITRAGE_PROFIT } = require('../config/arbitrage.config');
 
 /**
  * ArbitrageService - Detect arbitrage opportunities
@@ -86,7 +88,8 @@ class ArbitrageService {
           home_norm: homeNorm,
           away_norm: awayNorm,
           odds: match.odds || {},
-          time: match.time || ''
+          time: match.time || '',
+          league: match.league || match.league_name || ''
         };
       }
     }
@@ -122,6 +125,18 @@ class ArbitrageService {
       if (Object.keys(providers).length < 2) continue;
 
       const matchInfo = eventData.match_info;
+      
+      // Get league name from first provider that has it
+      let leagueName = '';
+      for (const [provider, matchData] of Object.entries(providers)) {
+        if (matchData.league) {
+          leagueName = matchData.league;
+          break;
+        }
+      }
+      
+      // Detect tier for this match
+      const tier = detectTier(leagueName);
 
       for (const market of ['ft_hdp', 'ft_ou', 'ht_hdp', 'ht_ou']) {
         if (!this.settings.market_filter[market]) continue;
@@ -166,6 +181,15 @@ class ArbitrageService {
         if (margin < this.settings.min_percent || margin > this.settings.max_percent) {
           continue;
         }
+        
+        // Convert margin to decimal profit (e.g., -5% margin = 5% profit = 0.05)
+        const profit = Math.abs(margin) / 100;
+        
+        // Filter out opportunities with profit > MAX_ARBITRAGE_PROFIT (default 10%)
+        if (profit > MAX_ARBITRAGE_PROFIT) {
+          logger.warn(`Ignored arbitrage with profit=${profit.toFixed(4)} (${(profit * 100).toFixed(2)}%) > ${(MAX_ARBITRAGE_PROFIT * 100).toFixed(0)}% for match ${matchInfo.home} vs ${matchInfo.away}`);
+          continue;
+        }
 
         opportunities.push({
           match_id: matchSig,
@@ -174,6 +198,32 @@ class ArbitrageService {
           time: matchInfo.time,
           market,
           margin,
+          profit: profit, // Add profit as decimal
+          tier: tier, // Add tier (1, 2, or 3)
+          league: leagueName, // Add league name
+          legs: [
+            {
+              site: bestHome.provider,
+              league: leagueName,
+              match: {
+                home: matchInfo.home,
+                away: matchInfo.away
+              },
+              pick: market.includes('hdp') ? 'home' : 'over',
+              odds: bestHome.value
+            },
+            {
+              site: bestAway.provider,
+              league: leagueName,
+              match: {
+                home: matchInfo.home,
+                away: matchInfo.away
+              },
+              pick: market.includes('hdp') ? 'away' : 'under',
+              odds: bestAway.value
+            }
+          ],
+          // Legacy fields for backward compatibility
           leg_1: {
             provider: bestHome.provider,
             odds: bestHome.value,

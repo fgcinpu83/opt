@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const logger = require('../config/logger');
 const arbitrageService = require('../services/arbitrage.service');
+const { broadcastOpportunity, broadcastOpportunities } = require('../websocket/opportunities.ws');
 
 /**
  * GET /api/v1/scanner/opportunities
@@ -53,6 +54,12 @@ router.post('/detect', async (req, res) => {
     }
 
     const result = arbitrageService.processOdds(odds_by_provider);
+    
+    // Broadcast opportunities via WebSocket to connected clients
+    if (result.opportunities && result.opportunities.length > 0) {
+      logger.info(`Broadcasting ${result.opportunities.length} opportunities via WebSocket`);
+      broadcastOpportunities(result.opportunities);
+    }
 
     res.json({
       success: true,
@@ -113,14 +120,20 @@ router.post('/opportunities', async (req, res) => {
     }
 
     logger.info('New opportunity created', opportunity);
+    
+    const createdOpportunity = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...opportunity,
+      created_at: new Date().toISOString()
+    };
+    
+    // Broadcast new opportunity via WebSocket
+    broadcastOpportunity(createdOpportunity);
+    logger.info('Broadcasted new opportunity via WebSocket');
 
     res.json({
       success: true,
-      opportunity: {
-        id: Math.random().toString(36).substr(2, 9),
-        ...opportunity,
-        created_at: new Date().toISOString()
-      }
+      opportunity: createdOpportunity
     });
 
   } catch (error) {
@@ -137,10 +150,13 @@ router.post('/opportunities', async (req, res) => {
  * WebSocket endpoint for live arbitrage feed
  */
 router.get('/live-feed', (req, res) => {
+  const { getClientsCount } = require('../websocket/opportunities.ws');
+  
   res.json({
     success: true,
     message: 'Use WebSocket connection for live feed',
-    ws_url: '/ws/scanner'
+    ws_url: 'ws://localhost:3000/ws/opportunities',
+    connected_clients: getClientsCount()
   });
 });
 
