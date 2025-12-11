@@ -1,17 +1,157 @@
 /**
  * Session Manager
  * Handles browser sessions and authentication for providers
+ * Uses Redis for session storage and sharing between workers
  */
 
 const logger = require('../utils/logger');
 const validators = require('../utils/validators');
 const browserService = require('../services/browserService');
 const { TIMEOUTS } = require('../config/constants');
+const { redisClient } = require('../config/redis');
 
 const sessionManager = {
-  // Store active sessions
+  // Store active sessions (local cache)
   sessions: {},
   
+  // Redis session TTL (10 minutes)
+  SESSION_TTL: 600,
+  
+  /**
+   * Get session key for Redis
+   * @param {string} provider - Provider name (e.g., 'qq188', 'csport')
+   * @param {string} username - Username
+   * @returns {string} Redis key
+   */
+  getSessionKey(provider, username) {
+    return `session:${provider}:${username}`;
+  },
+
+  /**
+   * Get lock key for Redis (prevent concurrent login)
+   * @param {string} provider - Provider name
+   * @param {string} username - Username
+   * @returns {string} Redis lock key
+   */
+  getLockKey(provider, username) {
+    return `lock:${provider}:${username}`;
+  },
+
+  /**
+   * Acquire lock for session creation
+   * @param {string} provider - Provider name
+   * @param {string} username - Username
+   * @returns {Promise<boolean>} True if lock acquired
+   */
+  async acquireLock(provider, username) {
+    try {
+      const lockKey = this.getLockKey(provider, username);
+      const result = await redisClient.set(lockKey, '1', 'EX', 30, 'NX');
+      return result === 'OK';
+    } catch (error) {
+      logger.error('Failed to acquire lock', error);
+      return false;
+    }
+  },
+
+  /**
+   * Release lock for session creation
+   * @param {string} provider - Provider name
+   * @param {string} username - Username
+   * @returns {Promise<void>}
+   */
+  async releaseLock(provider, username) {
+    try {
+      const lockKey = this.getLockKey(provider, username);
+      await redisClient.del(lockKey);
+    } catch (error) {
+      logger.error('Failed to release lock', error);
+    }
+  },
+
+  /**
+   * Store session in Redis
+   * @param {string} provider - Provider name
+   * @param {string} username - Username
+   * @param {Object} sessionData - Session data (cookies, tokens, etc.)
+   * @returns {Promise<boolean>} True if successful
+   */
+  async storeSession(provider, username, sessionData) {
+    try {
+      const sessionKey = this.getSessionKey(provider, username);
+      const data = JSON.stringify({
+        ...sessionData,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+      });
+      
+      await redisClient.setex(sessionKey, this.SESSION_TTL, data);
+      logger.info(`Session stored in Redis: ${sessionKey}`);
+      return true;
+    } catch (error) {
+      logger.error('Failed to store session in Redis', error);
+      return false;
+    }
+  },
+
+  /**
+   * Retrieve session from Redis
+   * @param {string} provider - Provider name
+   * @param {string} username - Username
+   * @returns {Promise<Object|null>} Session data or null
+   */
+  async retrieveSession(provider, username) {
+    try {
+      const sessionKey = this.getSessionKey(provider, username);
+      const data = await redisClient.get(sessionKey);
+      
+      if (!data) {
+        logger.debug(`No session found in Redis: ${sessionKey}`);
+        return null;
+      }
+      
+      const session = JSON.parse(data);
+      
+      // Update last activity
+      session.lastActivity = new Date().toISOString();
+      await redisClient.setex(sessionKey, this.SESSION_TTL, JSON.stringify(session));
+      
+      logger.debug(`Session retrieved from Redis: ${sessionKey}`);
+      return session;
+    } catch (error) {
+      logger.error('Failed to retrieve session from Redis', error);
+      return null;
+    }
+  },
+
+  /**
+   * Validate session (check if cookies are still valid)
+   * @param {Object} sessionData - Session data with cookies
+   * @returns {boolean} True if session appears valid
+   */
+  validateSession(sessionData) {
+    if (!sessionData || !sessionData.cookies) {
+      return false;
+    }
+    
+    // Check if session has required cookies
+    const cookies = sessionData.cookies;
+    if (!Array.isArray(cookies) || cookies.length === 0) {
+      return false;
+    }
+    
+    // Check if cookies are not expired
+    const now = Date.now() / 1000; // Unix timestamp in seconds
+    const validCookies = cookies.filter(cookie => {
+      if (cookie.expires && cookie.expires < now) {
+        return false;
+      }
+      return true;
+    });
+    
+    return validCookies.length > 0;
+  },
+
   /**
    * Create a new session for a provider
    * @param {Object} provider - Provider configuration
@@ -32,46 +172,105 @@ const sessionManager = {
         return null;
       }
       
-      logger.info(`Creating session for ${provider.name}`);
+      const { username } = credentials;
       
-      // Launch browser
-      const browser = await browserService.launchBrowser(proxyConfig);
-      
-      // Create context
-      const context = await browserService.createContext(browser);
-      
-      // Create page
-      const page = await browserService.createPage(context);
-      
-      // Navigate to login URL
-      await browserService.goto(page, loginUrl);
-      
-      // Perform login (provider-specific logic)
-      const loginSuccess = await this._performLogin(page, provider, credentials);
-      
-      if (!loginSuccess) {
-        logger.error(`Login failed for ${provider.name}`);
-        await browserService.closeBrowser(browser);
-        return null;
+      // Try to acquire lock to prevent concurrent login
+      const lockAcquired = await this.acquireLock(provider.id, username);
+      if (!lockAcquired) {
+        logger.warn(`Could not acquire lock for ${provider.name}:${username}, another worker may be creating session`);
+        // Wait a bit and try to retrieve session
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return await this.getOrCreateSession(provider, loginUrl, credentials, proxyConfig);
       }
       
-      // Store session
-      const session = {
-        provider: provider.id,
-        browser,
-        context,
-        page,
-        createdAt: new Date(),
-        lastActivity: new Date(),
-        isActive: true,
-      };
-      
-      this.sessions[provider.id] = session;
-      
-      logger.info(`Session created successfully for ${provider.name}`);
-      return session;
+      try {
+        logger.info(`Creating session for ${provider.name}:${username}`);
+        
+        // Launch browser
+        const browser = await browserService.launchBrowser(proxyConfig);
+        
+        // Create context
+        const context = await browserService.createContext(browser);
+        
+        // Create page
+        const page = await browserService.createPage(context);
+        
+        // Navigate to login URL
+        await browserService.goto(page, loginUrl);
+        
+        // Perform login (provider-specific logic)
+        const loginSuccess = await this._performLogin(page, provider, credentials);
+        
+        if (!loginSuccess) {
+          logger.error(`Login failed for ${provider.name}`);
+          await browserService.closeBrowser(browser);
+          return null;
+        }
+        
+        // Extract cookies after successful login
+        const cookies = await context.cookies();
+        
+        // Store session in Redis
+        const sessionData = {
+          provider: provider.id,
+          username,
+          cookies,
+        };
+        
+        await this.storeSession(provider.id, username, sessionData);
+        
+        // Store local session (with browser references)
+        const session = {
+          provider: provider.id,
+          username,
+          browser,
+          context,
+          page,
+          cookies,
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          isActive: true,
+        };
+        
+        this.sessions[provider.id] = session;
+        
+        logger.info(`Session created successfully for ${provider.name}:${username}`);
+        return session;
+      } finally {
+        // Always release lock
+        await this.releaseLock(provider.id, username);
+      }
     } catch (error) {
       logger.error(`Session creation failed for ${provider.name}`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Get or create session (check Redis first)
+   * @param {Object} provider - Provider configuration
+   * @param {string} loginUrl - Login URL
+   * @param {Object} credentials - Login credentials
+   * @param {Object} proxyConfig - Optional proxy configuration
+   * @returns {Promise<Object|null>} Session object or null on failure
+   */
+  async getOrCreateSession(provider, loginUrl, credentials, proxyConfig = null) {
+    try {
+      const { username } = credentials;
+      
+      // Check Redis first
+      const redisSession = await this.retrieveSession(provider.id, username);
+      
+      if (redisSession && this.validateSession(redisSession)) {
+        logger.info(`Using existing session from Redis for ${provider.name}:${username}`);
+        return redisSession;
+      }
+      
+      // No valid session in Redis, create new one
+      logger.info(`No valid session in Redis, creating new session for ${provider.name}:${username}`);
+      return await this.createSession(provider, loginUrl, credentials, proxyConfig);
+    } catch (error) {
+      logger.error(`Failed to get or create session for ${provider.name}`, error);
       return null;
     }
   },

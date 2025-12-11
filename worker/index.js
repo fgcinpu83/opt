@@ -9,20 +9,25 @@ const sessionManager = require('./sessions/sessionManager');
 const oddsService = require('./services/oddsService');
 const browserService = require('./services/browserService');
 const { TIMEOUTS, URLS, RETRIES, WORKER } = require('./config/constants');
+const { initializeRedis, closeRedis, testConnection } = require('./config/redis');
+const csportScraper = require('./scrapers/csport');
 
 // Provider configurations (to be loaded from environment or config file)
 const PROVIDERS = [
-  // Example provider configuration
-  // {
-  //   id: 'provider1',
-  //   name: 'Provider 1',
-  //   loginUrl: 'https://provider1.com/login',
-  //   oddsUrl: 'https://provider1.com/odds',
-  //   credentials: {
-  //     username: process.env.PROVIDER1_USER,
-  //     password: process.env.PROVIDER1_PASS,
-  //   },
-  // },
+  // C-Sport via QQ188
+  {
+    id: 'qq188',
+    name: 'QQ188 C-Sport',
+    type: 'csport',
+    loginUrl: 'https://mylv.5336267.com/Member/Login',
+    oddsUrl: 'https://mylv.5336267.com/Member/BetsView/BetLight/DataOdds.ashx',
+    credentials: {
+      username: process.env.QQ188_USERNAME || '',
+      password: process.env.QQ188_PASSWORD || '',
+    },
+    scraper: csportScraper,
+  },
+  // Add more providers here
 ];
 
 // Worker state
@@ -41,6 +46,18 @@ async function initialize() {
     // Load environment variables if needed
     require('dotenv').config();
     
+    // Initialize Redis connection
+    logger.info('Initializing Redis connection...');
+    initializeRedis();
+    
+    // Test Redis connection
+    const redisConnected = await testConnection();
+    if (!redisConnected) {
+      logger.error('Redis connection test failed!');
+      return false;
+    }
+    logger.info('Redis connection successful');
+    
     // Initialize proxy service
     const proxies = loadProxies();
     if (proxies.length > 0) {
@@ -55,6 +72,12 @@ async function initialize() {
       logger.warn('No providers configured. Please add providers to the configuration.');
     } else {
       logger.info(`Loaded ${PROVIDERS.length} providers`);
+      for (const provider of PROVIDERS) {
+        logger.info(`  - ${provider.name} (${provider.id})`);
+        if (!provider.credentials.username || !provider.credentials.password) {
+          logger.warn(`    WARNING: No credentials configured for ${provider.name}`);
+        }
+      }
     }
     
     logger.info('Worker initialization complete');
@@ -101,36 +124,29 @@ async function processProvider(provider) {
   try {
     logger.info(`Processing provider: ${provider.name}`);
     
-    // Get or create session
-    let session = sessionManager.getSession(provider.id);
-    
-    if (!session) {
-      logger.info(`No existing session for ${provider.name}, creating new one...`);
-      
-      // Get proxy if available
-      const proxy = proxyService.getNextProxy();
-      const proxyConfig = proxyService.formatProxyForPlaywright(proxy);
-      
-      // Create new session
-      session = await sessionManager.createSession(
-        provider,
-        provider.loginUrl,
-        provider.credentials,
-        proxyConfig
-      );
-      
-      if (!session) {
-        logger.error(`Failed to create session for ${provider.name}`);
-        return;
-      }
+    // Check if provider has valid credentials
+    if (!provider.credentials.username || !provider.credentials.password) {
+      logger.warn(`Skipping ${provider.name} - no credentials configured`);
+      return;
     }
     
-    // Fetch odds for this provider
-    // This is a placeholder - actual implementation would scrape the provider's site
-    logger.info(`Fetching odds from ${provider.name}...`);
-    
-    // Example: Navigate to odds page and extract data
-    // const oddsData = await extractOddsFromProvider(session, provider);
+    // Use provider-specific scraper if available
+    if (provider.scraper && typeof provider.scraper.fetchOdds === 'function') {
+      logger.info(`Using scraper for ${provider.name}...`);
+      
+      const oddsData = await provider.scraper.fetchOdds(provider.credentials);
+      
+      if (oddsData && oddsData.matches) {
+        logger.info(`Successfully fetched ${oddsData.matches.length} matches from ${provider.name}`);
+        
+        // Send data to engine/backend for arbitrage detection
+        await sendOddsToEngine(oddsData);
+      } else {
+        logger.warn(`No odds data received from ${provider.name}`);
+      }
+    } else {
+      logger.warn(`No scraper configured for ${provider.name}`);
+    }
     
     logger.info(`Successfully processed ${provider.name}`);
   } catch (error) {
@@ -142,26 +158,37 @@ async function processProvider(provider) {
 }
 
 /**
+ * Send odds data to engine for arbitrage detection
+ * @param {Object} oddsData - Standardized odds data
+ */
+async function sendOddsToEngine(oddsData) {
+  try {
+    logger.debug('Sending odds data to engine...');
+    
+    // Send to engine API (implementation depends on engine API)
+    // For now, just log the data
+    logger.info(`Odds data ready: ${oddsData.provider}, ${oddsData.matches.length} matches`);
+    
+    // TODO: Implement actual API call to engine
+    // await axios.post(`${URLS.ENGINE}/odds`, oddsData);
+  } catch (error) {
+    logger.error('Failed to send odds data to engine', error);
+  }
+}
+
+/**
  * Main worker loop
  */
 async function mainLoop() {
   try {
     logger.debug('Starting main loop iteration');
     
-    // Fetch current odds from bot API
-    const oddsData = await oddsService.fetchOdds(URLS.BOT);
-    
-    if (oddsData) {
-      logger.info('Received odds data from bot API');
-      // Process odds data here
-    }
-    
     // Process each provider
     for (const provider of PROVIDERS) {
       await processProvider(provider);
       
       // Small delay between providers
-      await sleep(1000);
+      await sleep(2000);
     }
     
     // Clean up inactive sessions
@@ -227,6 +254,9 @@ async function stop() {
   
   // Close all sessions
   await sessionManager.closeAllSessions();
+  
+  // Close Redis connection
+  await closeRedis();
   
   logger.info('Worker stopped');
 }
