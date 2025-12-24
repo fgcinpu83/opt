@@ -116,13 +116,29 @@ function broadcastOpportunity(opportunity) {
 function transformOpportunity(opportunity) {
   const { bet1, bet2, profit, roi } = opportunity;
 
-  const roundStake = (raw) => Math.round(raw / 10) * 10;
+  // CRITICAL: Stake rounding - last digit MUST be 0 or 5
+  const roundStake = (raw) => {
+    const rounded = Math.round(raw);
+    const lastDigit = rounded % 10;
+    
+    // If last digit is 1-4, round down to 0
+    if (lastDigit >= 1 && lastDigit <= 4) {
+      return rounded - lastDigit;
+    }
+    // If last digit is 6-9, round up to next 5 or 10
+    if (lastDigit >= 6 && lastDigit <= 9) {
+      return rounded + (10 - lastDigit);
+    }
+    // Last digit is already 0 or 5
+    return rounded;
+  };
 
+  // Normalize odds to Hongkong format (decimal - 1)
   const normalizeOdds = (decimalOdds) => {
     const decimal = parseFloat(decimalOdds);
     return {
       decimal: decimal,
-      hk_odds: decimal - 1
+      hk_odds: parseFloat((decimal - 1).toFixed(2)) // Hongkong odds
     };
   };
 

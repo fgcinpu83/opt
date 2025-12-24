@@ -11,6 +11,7 @@ import { SystemHealth, ConnectionStatus, BetConfig, LiveOpp, ExecutedBet, LogEnt
 function App() {
     const [isRunning, setIsRunning] = useState(false);
     const [ping, setPing] = useState(45);
+    const [accounts, setAccounts] = useState<any[]>([]);
 
     const [health, setHealth] = useState<SystemHealth>({
         engineApi: ConnectionStatus.CONNECTED,
@@ -64,6 +65,23 @@ function App() {
         setLogs(prev => [...prev.slice(-49), newLog]);
     };
 
+    // Fetch accounts on mount
+    useEffect(() => {
+        const fetchAccounts = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/sessions?user_id=1`);
+                const data = await response.json();
+                if (data.success && data.accounts) {
+                    setAccounts(data.accounts);
+                }
+            } catch (error) {
+                console.error('Failed to fetch accounts:', error);
+            }
+        };
+        fetchAccounts();
+    }, []);
+
+    // Native WebSocket connection (NO socket.io)
     useEffect(() => {
         const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws/opportunities';
         let ws: WebSocket | null = null;
@@ -202,24 +220,41 @@ function App() {
 
                 <div className="col-span-12 lg:col-span-3 space-y-4 flex flex-col h-[calc(100vh-100px)]">
                     <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
-                        <AccountPanel
-                            label="Account 1"
-                            initialSportsbook="NOVA"
-                            isConnected={true}
-                            isRunning={isRunning}
-                            ping={ping}
-                            balance={5240.50}
-                            onToggleBot={toggleBot}
-                        />
-                        <AccountPanel
-                            label="Account 2"
-                            initialSportsbook="SBOBET"
-                            isConnected={true}
-                            isRunning={isRunning}
-                            ping={ping + 12}
-                            balance={3100.00}
-                            onToggleBot={toggleBot}
-                        />
+                        {accounts.length > 0 ? (
+                            accounts.slice(0, 2).map((account, idx) => (
+                                <AccountPanel
+                                    key={account.id}
+                                    label={`Account ${String.fromCharCode(65 + idx)}`}
+                                    initialSportsbook={account.sportsbook}
+                                    isConnected={account.status === 'online'}
+                                    isRunning={isRunning}
+                                    ping={ping + idx * 12}
+                                    balance={account.balance || 0}
+                                    onToggleBot={toggleBot}
+                                />
+                            ))
+                        ) : (
+                            <>
+                                <AccountPanel
+                                    label="Account A"
+                                    initialSportsbook="NOVA"
+                                    isConnected={false}
+                                    isRunning={isRunning}
+                                    ping={ping}
+                                    balance={0}
+                                    onToggleBot={toggleBot}
+                                />
+                                <AccountPanel
+                                    label="Account B"
+                                    initialSportsbook="SBOBET"
+                                    isConnected={false}
+                                    isRunning={isRunning}
+                                    ping={ping + 12}
+                                    balance={0}
+                                    onToggleBot={toggleBot}
+                                />
+                            </>
+                        )}
                     </div>
                     <div className="flex-1 min-h-[300px]">
                         <Configuration config={config} onChange={setConfig} />

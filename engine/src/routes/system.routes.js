@@ -5,6 +5,8 @@ const router = express.Router();
 const db = require('../config/database');
 const redis = require('../config/redis');
 const logger = require('../config/logger');
+const { initiateManualLogin, checkAuthenticationStatus, getActiveSessions } = require('../services/manual-login.service');
+const { loadEndpointProfile } = require('../services/endpoint-capture.service');
 
 /**
  * GET /api/v1/system/health
@@ -279,12 +281,84 @@ router.get('/auto-status', async (req, res) => {
 
 /**
  * POST /api/v1/system/auto-toggle
- * Toggle Auto Robot on/off
+ * Toggle Auto Robot on/off - START TRADING FLOW
  */
 router.post('/auto-toggle', async (req, res) => {
   try {
     const { user_id = 1, enabled } = req.body;
 
+    logger.info('Auto robot toggle requested', { user_id, enabled });
+
+    // If enabling, check account sessions
+    if (enabled) {
+      // Get all accounts for user
+      const accountsResult = await db.query(
+        'SELECT id, sportsbook, url, username, status FROM sportsbook_accounts WHERE user_id = $1 ORDER BY created_at LIMIT 2',
+        [user_id]
+      );
+
+      const accounts = accountsResult.rows;
+
+      if (accounts.length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: 'Need at least 2 accounts configured',
+          message: 'Please configure Account A and Account B first'
+        });
+      }
+
+      // Check if accounts need login
+      const needsLogin = [];
+      const ready = [];
+
+      for (const account of accounts) {
+        // Check if endpoint profile exists
+        const profile = await loadEndpointProfile(
+          account.sportsbook.toLowerCase(),
+          account.sportsbook,
+          'PRIVATE'
+        );
+
+        if (!profile || account.status !== 'online') {
+          needsLogin.push(account);
+        } else {
+          ready.push(account);
+        }
+      }
+
+      // If any account needs login, initiate manual login flow
+      if (needsLogin.length > 0) {
+        logger.info('Accounts need manual login', { count: needsLogin.length });
+
+        const loginSessions = [];
+        for (const account of needsLogin) {
+          try {
+            const session = await initiateManualLogin(account);
+            loginSessions.push(session);
+          } catch (error) {
+            logger.error('Failed to initiate login', { account_id: account.id, error: error.message });
+          }
+        }
+
+        return res.json({
+          success: false,
+          status: 'needs_login',
+          message: 'Please complete manual login in browser windows',
+          needs_login: needsLogin.map(a => ({
+            account_id: a.id,
+            sportsbook: a.sportsbook,
+            username: a.username
+          })),
+          ready_accounts: ready.length,
+          login_sessions: loginSessions
+        });
+      }
+
+      // All accounts ready, enable auto robot
+      logger.info('All accounts ready, enabling auto robot', { user_id });
+    }
+
+    // Update auto robot status
     const query = `
       INSERT INTO system_config (user_id, config_key, config_value)
       VALUES ($1, 'auto_robot_enabled', $2)
@@ -308,12 +382,61 @@ router.post('/auto-toggle', async (req, res) => {
 
     res.json({
       success: true,
+      status: 'ready',
       message: `Auto robot ${enabled ? 'enabled' : 'disabled'}`,
       config: result.rows[0]
     });
 
   } catch (error) {
     logger.error('Toggle auto error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/system/auth-status/:accountId
+ * Check authentication status for an account
+ */
+router.get('/auth-status/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const status = await checkAuthenticationStatus(parseInt(accountId));
+
+    res.json({
+      success: true,
+      account_id: accountId,
+      ...status
+    });
+
+  } catch (error) {
+    logger.error('Check auth status error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/system/active-sessions
+ * Get all active browser sessions
+ */
+router.get('/active-sessions', async (req, res) => {
+  try {
+    const sessions = getActiveSessions();
+
+    res.json({
+      success: true,
+      sessions,
+      count: sessions.length
+    });
+
+  } catch (error) {
+    logger.error('Get active sessions error', { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
