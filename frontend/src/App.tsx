@@ -7,10 +7,22 @@ import { DailyProfit } from './components/DailyProfit';
 import { Configuration } from './components/Configuration';
 import { Logs } from './components/Logs';
 import { SystemHealth, ConnectionStatus, BetConfig, LiveOpp, ExecutedBet, LogEntry } from './types';
+import { systemAPI } from './services/api';
+
+interface WhitelabelAccount {
+    whitelabel: string;
+    account_id: number;
+    provider: string;
+    url: string;
+    username: string;
+    status: string;
+    balance: number;
+}
 
 function App() {
     const [isRunning, setIsRunning] = useState(false);
     const [ping, setPing] = useState(45);
+    const [accounts, setAccounts] = useState<WhitelabelAccount[]>([]);
 
     const [health, setHealth] = useState<SystemHealth>({
         engineApi: ConnectionStatus.CONNECTED,
@@ -45,13 +57,28 @@ function App() {
         { id: '2', timestamp: new Date().toLocaleTimeString(), level: 'INFO', message: 'Connected to engine API.' },
     ]);
 
-    const toggleBot = () => {
-        setIsRunning(!isRunning);
-        setHealth(prev => ({
-            ...prev,
-            worker: !isRunning ? ConnectionStatus.PROCESSING : ConnectionStatus.STANDBY
-        }));
-        addLog(!isRunning ? 'Bot started trading.' : 'Bot stopped.', !isRunning ? 'SUCCESS' : 'WARN');
+    const toggleBot = async () => {
+        try {
+            const result = await systemAPI.toggleAuto(!isRunning);
+            
+            if (result.requires_login) {
+                // Show login required message
+                addLog('Manual login required for accounts', 'WARN');
+                result.accounts_to_login.forEach((acc: any) => {
+                    addLog(`Login needed: ${acc.whitelabel} - ${acc.sportsbook}`, 'WARN');
+                });
+                return;
+            }
+            
+            setIsRunning(!isRunning);
+            setHealth(prev => ({
+                ...prev,
+                worker: !isRunning ? ConnectionStatus.PROCESSING : ConnectionStatus.STANDBY
+            }));
+            addLog(!isRunning ? 'Bot started trading.' : 'Bot stopped.', !isRunning ? 'SUCCESS' : 'WARN');
+        } catch (error: any) {
+            addLog(`Error: ${error.message}`, 'ERROR');
+        }
     };
 
     const addLog = (message: string, level: LogEntry['level'] = 'INFO') => {
@@ -65,7 +92,10 @@ function App() {
     };
 
     useEffect(() => {
-        const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws/opportunities';
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = import.meta.env.VITE_WS_HOST || window.location.host || 'localhost:3000';
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/opportunities`;
+        
         let ws: WebSocket | null = null;
         let reconnectTimeout: NodeJS.Timeout;
 
@@ -162,7 +192,7 @@ function App() {
                 };
 
                 ws.onclose = () => {
-                    addLog('WebSocket disconnected', 'WARN');
+                    addLog('WebSocket disconnected, reconnecting...', 'WARN');
                     setHealth(prev => ({ ...prev, engineApi: ConnectionStatus.DISCONNECTED }));
                     reconnectTimeout = setTimeout(connect, 5000);
                 };
@@ -194,6 +224,21 @@ function App() {
         return () => clearInterval(interval);
     }, [isRunning]);
 
+    // Fetch whitelabel accounts on mount
+    useEffect(() => {
+        const fetchAccounts = async () => {
+            try {
+                const result = await systemAPI.getHealth();
+                // For now, use default accounts
+                // In production, fetch from /api/v1/system/whitelabels
+            } catch (error) {
+                console.error('Failed to fetch accounts:', error);
+            }
+        };
+        
+        fetchAccounts();
+    }, []);
+
     return (
         <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-indigo-500/30">
             <Header health={health} />
@@ -203,7 +248,8 @@ function App() {
                 <div className="col-span-12 lg:col-span-3 space-y-4 flex flex-col h-[calc(100vh-100px)]">
                     <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
                         <AccountPanel
-                            label="Account 1"
+                            label="Account A"
+                            whitelabel="A"
                             initialSportsbook="NOVA"
                             isConnected={true}
                             isRunning={isRunning}
@@ -212,7 +258,8 @@ function App() {
                             onToggleBot={toggleBot}
                         />
                         <AccountPanel
-                            label="Account 2"
+                            label="Account B"
+                            whitelabel="B"
                             initialSportsbook="SBOBET"
                             isConnected={true}
                             isRunning={isRunning}

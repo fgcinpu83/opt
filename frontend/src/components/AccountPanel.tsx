@@ -1,26 +1,58 @@
 import React, { useState } from 'react';
 import { Power, User, Lock, Globe, Activity, Link } from 'lucide-react';
+import { sessionAPI, systemAPI } from '../services/api';
 
 interface AccountPanelProps {
   label: string;
-  initialSportsbook: string;
+  whitelabel: string; // 'A' or 'B'
+  initialSportsbook?: string;
+  initialUrl?: string;
+  initialUsername?: string;
   isConnected: boolean;
   isRunning: boolean;
   ping: number;
   balance: number;
   onToggleBot: () => void;
+  onLoginRequired?: (account: any) => void;
 }
 
 export const AccountPanel: React.FC<AccountPanelProps> = ({
   label,
-  initialSportsbook,
+  whitelabel,
+  initialSportsbook = '',
+  initialUrl = '',
+  initialUsername = '',
   isConnected,
   isRunning,
   ping,
   balance,
-  onToggleBot
+  onToggleBot,
+  onLoginRequired
 }) => {
   const [sportsbook, setSportsbook] = useState(initialSportsbook);
+  const [url, setUrl] = useState(initialUrl);
+  const [username, setUsername] = useState(initialUsername);
+  const [password, setPassword] = useState('');
+
+  const handleSaveAccount = async () => {
+    try {
+      const payload = {
+        sportsbook,
+        url,
+        username,
+        password,
+        user_id: 1
+      };
+
+      await sessionAPI.login(payload);
+      console.log(`Account ${whitelabel} saved successfully`);
+      
+      // Clear password after save
+      setPassword('');
+    } catch (error) {
+      console.error('Failed to save account:', error);
+    }
+  };
 
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden shadow-xl mb-4">
@@ -82,7 +114,13 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             <label className="block text-xs text-gray-500 mb-1">URL</label>
             <div className="relative">
               <Link className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-              <input type="text" className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" placeholder="https://..." />
+              <input 
+                type="text" 
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" 
+                placeholder="https://..." 
+              />
             </div>
           </div>
 
@@ -91,17 +129,39 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               <label className="block text-xs text-gray-500 mb-1">Username</label>
               <div className="relative">
                 <User className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-                <input type="text" className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" placeholder="User" />
+                <input 
+                  type="text" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" 
+                  placeholder="User" 
+                />
               </div>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-                <input type="password" className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" placeholder="••••" />
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block pl-9 p-2.5" 
+                  placeholder="••••" 
+                />
               </div>
             </div>
           </div>
+
+          {/* Save Account Button */}
+          {(sportsbook && url && username && password) && (
+            <button
+              onClick={handleSaveAccount}
+              className="w-full bg-indigo-600/20 text-indigo-400 border border-indigo-600/50 hover:bg-indigo-600 hover:text-white p-2 rounded-lg font-semibold text-sm transition-all"
+            >
+              Save Account
+            </button>
+          )}
         </div>
 
         {/* Action Button */}

@@ -278,13 +278,168 @@ router.get('/auto-status', async (req, res) => {
 });
 
 /**
+ * GET /api/v1/system/whitelabels
+ * Get configured whitelabel accounts (A and B)
+ */
+router.get('/whitelabels', async (req, res) => {
+  try {
+    const { user_id = 1 } = req.query;
+
+    const query = `
+      SELECT id, sportsbook, url, username, status, balance
+      FROM sportsbook_accounts
+      WHERE user_id = $1
+      ORDER BY created_at ASC
+      LIMIT 2
+    `;
+
+    const result = await db.query(query, [user_id]);
+    const accounts = result.rows;
+
+    // Map to whitelabel structure
+    const whitelabels = [];
+    
+    if (accounts.length > 0) {
+      whitelabels.push({
+        whitelabel: 'A',
+        account_id: accounts[0].id,
+        provider: accounts[0].sportsbook,
+        url: accounts[0].url,
+        username: accounts[0].username,
+        status: accounts[0].status,
+        balance: accounts[0].balance
+      });
+    }
+
+    if (accounts.length > 1) {
+      whitelabels.push({
+        whitelabel: 'B',
+        account_id: accounts[1].id,
+        provider: accounts[1].sportsbook,
+        url: accounts[1].url,
+        username: accounts[1].username,
+        status: accounts[1].status,
+        balance: accounts[1].balance
+      });
+    }
+
+    res.json({
+      success: true,
+      whitelabels,
+      accounts: ['A', 'B']
+    });
+
+  } catch (error) {
+    logger.error('Get whitelabels error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/v1/system/auto-toggle
- * Toggle Auto Robot on/off
+ * Toggle Auto Robot on/off - START TRADING FLOW
+ * 
+ * Flow:
+ * 1. Check session for Account A & B
+ * 2. If not logged in, generate LOGIN URL and return to UI
+ * 3. User performs manual login via browser
+ * 4. After authentication, auto-capture API + WS endpoints
+ * 5. Save endpoints to Redis
+ * 6. Validate profile
+ * 7. Start scanner & worker
  */
 router.post('/auto-toggle', async (req, res) => {
   try {
     const { user_id = 1, enabled } = req.body;
 
+    // If enabling, check account sessions first
+    if (enabled) {
+      // Get account A and B sessions
+      const accountsQuery = `
+        SELECT id, sportsbook, url, username, status
+        FROM sportsbook_accounts
+        WHERE user_id = $1
+        ORDER BY created_at ASC
+        LIMIT 2
+      `;
+      
+      const accountsResult = await db.query(accountsQuery, [user_id]);
+      const accounts = accountsResult.rows;
+
+      if (accounts.length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: 'Need at least 2 accounts configured',
+          message: 'Please configure Account A and Account B first',
+          accounts_configured: accounts.length,
+          accounts_needed: 2
+        });
+      }
+
+      const accountA = accounts[0];
+      const accountB = accounts[1];
+
+      // Check if accounts need login
+      const needsLogin = [];
+      
+      if (accountA.status !== 'online') {
+        needsLogin.push({
+          whitelabel: 'A',
+          account_id: accountA.id,
+          sportsbook: accountA.sportsbook,
+          url: accountA.url,
+          username: accountA.username
+        });
+      }
+
+      if (accountB.status !== 'online') {
+        needsLogin.push({
+          whitelabel: 'B',
+          account_id: accountB.id,
+          sportsbook: accountB.sportsbook,
+          url: accountB.url,
+          username: accountB.username
+        });
+      }
+
+      // If accounts need login, return login URLs
+      if (needsLogin.length > 0) {
+        logger.info('Accounts need manual login', { needsLogin });
+        
+        return res.json({
+          success: false,
+          requires_login: true,
+          message: 'Manual login required',
+          accounts_to_login: needsLogin
+        });
+      }
+
+      // Check if endpoints are captured in Redis
+      const { getEndpointProfile } = require('../capture/endpoint-capture.service');
+      
+      const profileA = await getEndpointProfile('A', accountA.sportsbook);
+      const profileB = await getEndpointProfile('B', accountB.sportsbook);
+
+      if (!profileA || !profileB) {
+        return res.status(400).json({
+          success: false,
+          error: 'Endpoint profiles not captured',
+          message: 'Please complete login process to capture endpoints',
+          profile_a_exists: !!profileA,
+          profile_b_exists: !!profileB
+        });
+      }
+
+      logger.info('All accounts ready, enabling auto trading', {
+        accountA: accountA.sportsbook,
+        accountB: accountB.sportsbook
+      });
+    }
+
+    // Toggle auto robot
     const query = `
       INSERT INTO system_config (user_id, config_key, config_value)
       VALUES ($1, 'auto_robot_enabled', $2)

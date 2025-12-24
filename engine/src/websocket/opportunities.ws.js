@@ -116,7 +116,22 @@ function broadcastOpportunity(opportunity) {
 function transformOpportunity(opportunity) {
   const { bet1, bet2, profit, roi } = opportunity;
 
-  const roundStake = (raw) => Math.round(raw / 10) * 10;
+  const roundStake = (raw) => {
+    // Round to nearest 10, then adjust to end in 0 or 5
+    const rounded = Math.round(raw / 10) * 10;
+    const lastDigit = rounded % 10;
+    
+    // If last digit is not 0 or 5, round to nearest 5
+    if (lastDigit !== 0 && lastDigit !== 5) {
+      if (lastDigit < 5) {
+        return Math.floor(rounded / 10) * 10 + 5;
+      } else {
+        return Math.ceil(rounded / 10) * 10;
+      }
+    }
+    
+    return rounded;
+  };
 
   const normalizeOdds = (decimalOdds) => {
     const decimal = parseFloat(decimalOdds);
