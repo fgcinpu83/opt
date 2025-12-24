@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Settings, Sliders, Clock, Filter, ShoppingBag } from 'lucide-react';
 import { BetConfig } from '../types';
+import { configAPI } from '../services/api';
 
 interface ConfigurationProps {
   config: BetConfig;
@@ -10,17 +11,58 @@ interface ConfigurationProps {
 export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }) => {
 
   const updateConfig = (key: keyof BetConfig, value: any) => {
-    onChange({ ...config, [key]: value });
+    const newConfig = { ...config, [key]: value };
+    onChange(newConfig);
+    
+    // Send to backend
+    sendConfigToBackend(newConfig);
   };
 
   const updateMarket = (key: keyof BetConfig['markets']) => {
-    onChange({
+    const newConfig = {
       ...config,
       markets: {
         ...config.markets,
         [key]: !config.markets[key]
       }
-    });
+    };
+    onChange(newConfig);
+    
+    // Send to backend
+    sendConfigToBackend(newConfig);
+  };
+
+  const sendConfigToBackend = async (cfg: BetConfig) => {
+    try {
+      // Build tier array from tier1, tier2, tier3
+      const tier = [];
+      if (cfg.tier1 > 0) tier.push(1);
+      if (cfg.tier2 > 0) tier.push(2);
+      if (cfg.tier3 > 0) tier.push(3);
+
+      // Build markets array from markets object
+      const markets = [];
+      if (cfg.markets.ftHdp) markets.push('FT_HDP');
+      if (cfg.markets.ftOu) markets.push('FT_OU');
+      if (cfg.markets.ft1x2) markets.push('FT_1X2');
+      if (cfg.markets.htHdp) markets.push('HT_HDP');
+      if (cfg.markets.htOu) markets.push('HT_OU');
+      if (cfg.markets.ht1x2) markets.push('HT_1X2');
+
+      const payload = {
+        tier,
+        profitMin: cfg.minProfit,
+        profitMax: cfg.maxProfit,
+        markets,
+        maxMinuteHT: cfg.maxMinuteHT,
+        maxMinuteFT: cfg.maxMinuteFT,
+        matchFilter: cfg.matchFilter
+      };
+
+      await configAPI.setSystem(payload);
+    } catch (error) {
+      console.error('Failed to send config to backend:', error);
+    }
   };
 
   // Send config to backend when it changes

@@ -73,7 +73,8 @@ export const systemAPI = {
   getStats: () => api.get('/api/v1/system/stats'),
   workerHeartbeat: (data) => api.post('/api/v1/system/worker/heartbeat', data),
   getAutoStatus: (userId = 1) => api.get('/api/v1/system/auto-status', { params: { user_id: userId } }),
-  toggleAuto: (enabled, userId = 1) => api.post('/api/v1/system/auto-toggle', { enabled, user_id: userId })
+  toggleAuto: (enabled, userId = 1) => api.post('/api/v1/system/auto-toggle', { enabled, user_id: userId }),
+  getWhitelabels: (userId = 1) => api.get('/api/v1/system/whitelabels', { params: { user_id: userId } })
 };
 
 export default api;

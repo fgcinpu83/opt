@@ -280,22 +280,75 @@ router.get('/auto-status', async (req, res) => {
 });
 
 /**
+ * GET /api/v1/system/whitelabels
+ * Get configured whitelabel accounts (A and B)
+ */
+router.get('/whitelabels', async (req, res) => {
+  try {
+    const { user_id = 1 } = req.query;
+
+    const query = `
+      SELECT id, sportsbook, url, username, status, balance
+      FROM sportsbook_accounts
+      WHERE user_id = $1
+      ORDER BY created_at ASC
+      LIMIT 2
+    `;
+
+    const result = await db.query(query, [user_id]);
+    const accounts = result.rows;
+
+    // Map to whitelabel structure
+    const whitelabels = [];
+    
+    if (accounts.length > 0) {
+      whitelabels.push({
+        whitelabel: 'A',
+        account_id: accounts[0].id,
+        provider: accounts[0].sportsbook,
+        url: accounts[0].url,
+        username: accounts[0].username,
+        status: accounts[0].status,
+        balance: accounts[0].balance
+      });
+    }
+
+    if (accounts.length > 1) {
+      whitelabels.push({
+        whitelabel: 'B',
+        account_id: accounts[1].id,
+        provider: accounts[1].sportsbook,
+        url: accounts[1].url,
+        username: accounts[1].username,
+        status: accounts[1].status,
+        balance: accounts[1].balance
+      });
+    }
+
+    res.json({
+      success: true,
+      whitelabels,
+      accounts: ['A', 'B']
+    });
+
+  } catch (error) {
+    logger.error('Get whitelabels error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/v1/system/auto-toggle
  * Toggle Auto Robot on/off - START TRADING FLOW
+
  */
 router.post('/auto-toggle', async (req, res) => {
   try {
     const { user_id = 1, enabled } = req.body;
 
-    logger.info('Auto robot toggle requested', { user_id, enabled });
-
-    // If enabling, check account sessions
-    if (enabled) {
-      // Get all accounts for user
-      const accountsResult = await db.query(
-        'SELECT id, sportsbook, url, username, status FROM sportsbook_accounts WHERE user_id = $1 ORDER BY created_at LIMIT 2',
-        [user_id]
-      );
 
       const accounts = accountsResult.rows;
 
@@ -303,62 +356,7 @@ router.post('/auto-toggle', async (req, res) => {
         return res.status(400).json({
           success: false,
           error: 'Need at least 2 accounts configured',
-          message: 'Please configure Account A and Account B first'
-        });
-      }
 
-      // Check if accounts need login
-      const needsLogin = [];
-      const ready = [];
-
-      for (const account of accounts) {
-        // Check if endpoint profile exists
-        const profile = await loadEndpointProfile(
-          account.sportsbook.toLowerCase(),
-          account.sportsbook,
-          'PRIVATE'
-        );
-
-        if (!profile || account.status !== 'online') {
-          needsLogin.push(account);
-        } else {
-          ready.push(account);
-        }
-      }
-
-      // If any account needs login, initiate manual login flow
-      if (needsLogin.length > 0) {
-        logger.info('Accounts need manual login', { count: needsLogin.length });
-
-        const loginSessions = [];
-        for (const account of needsLogin) {
-          try {
-            const session = await initiateManualLogin(account);
-            loginSessions.push(session);
-          } catch (error) {
-            logger.error('Failed to initiate login', { account_id: account.id, error: error.message });
-          }
-        }
-
-        return res.json({
-          success: false,
-          status: 'needs_login',
-          message: 'Please complete manual login in browser windows',
-          needs_login: needsLogin.map(a => ({
-            account_id: a.id,
-            sportsbook: a.sportsbook,
-            username: a.username
-          })),
-          ready_accounts: ready.length,
-          login_sessions: loginSessions
-        });
-      }
-
-      // All accounts ready, enable auto robot
-      logger.info('All accounts ready, enabling auto robot', { user_id });
-    }
-
-    // Update auto robot status
     const query = `
       INSERT INTO system_config (user_id, config_key, config_value)
       VALUES ($1, 'auto_robot_enabled', $2)
