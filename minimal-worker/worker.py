@@ -18,6 +18,12 @@ sessions = {}
 # Cooldown tracking: {cooldown_key: timestamp}
 cooldown_state = {}
 
+# Settlement tracking: {ticket_id: bet_data}
+active_settlements = {}
+
+# Exposure events tracking
+exposure_events = []
+
 
 def send_result(type_name, data):
     """Send result to API backend"""
@@ -236,6 +242,17 @@ async def execute_bet_pair(redis_client, pair_data):
         'cooldownKey': cooldown_key,
         'cooldownUntil': time.time() + COOLDOWN_SECONDS
     })
+    
+    # STEP 4: Start settlement watcher for both bets
+    print(f'[ARB-{arb_id}] 🔍 Starting settlement watchers')
+    bet_pair_id = f"{arb_id}_{int(time.time())}"
+    asyncio.create_task(watch_pair_settlement(
+        redis_client,
+        bet_pair_id,
+        positive_result,
+        hedge_result,
+        pair_data
+    ))
 
 
 async def execute_single_bet(bet_data, account_id):
@@ -332,6 +349,241 @@ async def persist_cooldown(redis_client, cooldown_key):
         print(f'[COOLDOWN] Persisted to Redis: {cooldown_key} ({COOLDOWN_SECONDS}s)')
     except Exception as e:
         print(f'[COOLDOWN] Failed to persist to Redis: {e}')
+
+
+async def poll_bet_settlement(redis_client, ticket_id, provider, account_id):
+    """Poll provider until bet is settled
+    Returns final status: settled|won|lost|void|half_won|half_lost
+    """
+    print(f'[SETTLEMENT] Polling {provider} for ticket {ticket_id}')
+    
+    poll_count = 0
+    max_polls = 120
+    poll_interval = 5
+    
+    while poll_count < max_polls:
+        try:
+            if account_id not in sessions:
+                print(f'[SETTLEMENT] Session lost for account {account_id}')
+                return 'error'
+            
+            page = sessions[account_id]['page']
+            
+            # Mock settlement check (replace with actual provider logic)
+            # In production: navigate to bet history, check ticket status
+            # await page.goto(f'{provider_url}/bet-history')
+            # status = await page.locator(f'[data-ticket="{ticket_id}"]').get_attribute('data-status')
+            
+            # Simulate settlement after random delay
+            await asyncio.sleep(poll_interval)
+            poll_count += 1
+            
+            # Simulate settlement logic (replace with real provider parsing)
+            if poll_count >= 3:
+                # Simulate different outcomes
+                outcome_roll = random.random()
+                if outcome_roll < 0.05:
+                    status = 'void'
+                elif outcome_roll < 0.10:
+                    status = 'half_won'
+                elif outcome_roll < 0.15:
+                    status = 'half_lost'
+                elif outcome_roll < 0.60:
+                    status = 'won'
+                else:
+                    status = 'lost'
+                
+                print(f'[SETTLEMENT] Ticket {ticket_id} settled: {status}')
+                return status
+            
+            print(f'[SETTLEMENT] Ticket {ticket_id} still pending ({poll_count}/{max_polls})')
+            
+        except Exception as e:
+            print(f'[SETTLEMENT] Error polling {ticket_id}: {e}')
+            await asyncio.sleep(poll_interval)
+            poll_count += 1
+    
+    print(f'[SETTLEMENT] Timeout polling {ticket_id} after {max_polls} attempts')
+    return 'timeout'
+
+
+async def watch_pair_settlement(redis_client, bet_pair_id, positive_result, hedge_result, pair_data):
+    """Watch both bets in a pair until settlement and reconcile outcomes"""
+    arb_id = pair_data['arbId']
+    whitelabel = pair_data.get('whitelabel', 'default')
+    positive_provider = pair_data['positiveBet'].get('provider', 'unknown')
+    hedge_provider = pair_data['hedgeBet'].get('provider', 'unknown')
+    
+    print(f'[SETTLEMENT-{arb_id}] Starting pair settlement watch: {bet_pair_id}')
+    
+    # Track settlement start
+    settlement_record = {
+        'bet_pair_id': bet_pair_id,
+        'arb_id': arb_id,
+        'whitelabel': whitelabel,
+        'positive_ticket': positive_result['ticketId'],
+        'hedge_ticket': hedge_result['ticketId'],
+        'positive_provider': positive_provider,
+        'hedge_provider': hedge_provider,
+        'started_at': time.time(),
+        'expected_outcome': 'arb_profit'
+    }
+    
+    active_settlements[bet_pair_id] = settlement_record
+    
+    # Poll both bets concurrently
+    positive_account = pair_data['positiveBet']['accountId']
+    hedge_account = pair_data['hedgeBet']['accountId']
+    
+    positive_status, hedge_status = await asyncio.gather(
+        poll_bet_settlement(redis_client, positive_result['ticketId'], positive_provider, positive_account),
+        poll_bet_settlement(redis_client, hedge_result['ticketId'], hedge_provider, hedge_account)
+    )
+    
+    print(f'[SETTLEMENT-{arb_id}] Both bets settled')
+    print(f'[SETTLEMENT-{arb_id}] Positive: {positive_status} | Hedge: {hedge_status}')
+    
+    # Reconcile pair outcome
+    await reconcile_pair_outcome(
+        redis_client,
+        bet_pair_id,
+        settlement_record,
+        positive_status,
+        hedge_status,
+        pair_data
+    )
+    
+    # Remove from active tracking
+    active_settlements.pop(bet_pair_id, None)
+
+
+async def reconcile_pair_outcome(redis_client, bet_pair_id, settlement_record, positive_status, hedge_status, pair_data):
+    """Reconcile pair outcome and detect exposure events"""
+    arb_id = pair_data['arbId']
+    whitelabel = settlement_record['whitelabel']
+    positive_provider = settlement_record['positive_provider']
+    hedge_provider = settlement_record['hedge_provider']
+    
+    print(f'[RECONCILE-{arb_id}] Analyzing pair outcome')
+    
+    # Detect exposure scenarios
+    is_exposure = False
+    exposure_reason = None
+    
+    # Scenario 1: Void on one side
+    if positive_status == 'void' and hedge_status != 'void':
+        is_exposure = True
+        exposure_reason = 'positive_void_hedge_active'
+    elif hedge_status == 'void' and positive_status != 'void':
+        is_exposure = True
+        exposure_reason = 'hedge_void_positive_active'
+    
+    # Scenario 2: Both void (no exposure but track)
+    elif positive_status == 'void' and hedge_status == 'void':
+        print(f'[RECONCILE-{arb_id}] Both bets voided - no exposure')
+        is_exposure = False
+    
+    # Scenario 3: Partial settlement
+    elif 'half_' in positive_status or 'half_' in hedge_status:
+        is_exposure = True
+        exposure_reason = f'partial_settlement_{positive_status}_{hedge_status}'
+    
+    # Scenario 4: Both lost (unexpected for arb)
+    elif positive_status == 'lost' and hedge_status == 'lost':
+        is_exposure = True
+        exposure_reason = 'both_lost_unexpected'
+    
+    # Scenario 5: Both won (unexpected for arb)
+    elif positive_status == 'won' and hedge_status == 'won':
+        is_exposure = True
+        exposure_reason = 'both_won_unexpected'
+    
+    # Expected outcome: one wins, one loses
+    elif (positive_status == 'won' and hedge_status == 'lost') or \
+         (positive_status == 'lost' and hedge_status == 'won'):
+        print(f'[RECONCILE-{arb_id}] ✅ Expected arb outcome - no exposure')
+        is_exposure = False
+    
+    # Handle exposure event
+    if is_exposure:
+        await handle_exposure_event(
+            redis_client,
+            bet_pair_id,
+            settlement_record,
+            positive_status,
+            hedge_status,
+            exposure_reason,
+            pair_data
+        )
+    else:
+        print(f'[RECONCILE-{arb_id}] Pair reconciled successfully')
+        send_result('pair_reconciled', {
+            'arbId': arb_id,
+            'betPairId': bet_pair_id,
+            'positiveStatus': positive_status,
+            'hedgeStatus': hedge_status,
+            'outcome': 'expected'
+        })
+
+
+async def handle_exposure_event(redis_client, bet_pair_id, settlement_record, positive_status, hedge_status, reason, pair_data):
+    """Handle exposure event - mark pair and persist to Redis"""
+    arb_id = pair_data['arbId']
+    whitelabel = settlement_record['whitelabel']
+    positive_provider = settlement_record['positive_provider']
+    
+    print(f'[EXPOSURE-{arb_id}] ⚠️ EXPOSURE EVENT DETECTED')
+    print(f'[EXPOSURE-{arb_id}] Reason: {reason}')
+    print(f'[EXPOSURE-{arb_id}] Positive: {positive_status} | Hedge: {hedge_status}')
+    
+    # Create exposure record
+    exposure_key = f"exposure:{whitelabel}:{positive_provider}:{bet_pair_id}"
+    exposure_record = {
+        'bet_pair_id': bet_pair_id,
+        'arb_id': arb_id,
+        'whitelabel': whitelabel,
+        'positive_provider': positive_provider,
+        'hedge_provider': settlement_record['hedge_provider'],
+        'positive_ticket': settlement_record['positive_ticket'],
+        'hedge_ticket': settlement_record['hedge_ticket'],
+        'positive_status': positive_status,
+        'hedge_status': hedge_status,
+        'exposure_reason': reason,
+        'detected_at': time.time(),
+        'expected_outcome': 'arb_profit',
+        'actual_outcome': f'{positive_status}_{hedge_status}'
+    }
+    
+    # Persist to Redis
+    try:
+        await redis_client.setex(
+            exposure_key,
+            86400,
+            json.dumps(exposure_record)
+        )
+        print(f'[EXPOSURE-{arb_id}] Persisted to Redis: {exposure_key}')
+    except Exception as e:
+        print(f'[EXPOSURE-{arb_id}] Failed to persist to Redis: {e}')
+    
+    # Track in memory
+    exposure_events.append(exposure_record)
+    
+    # Trigger alert hook
+    send_result('exposure_alert', {
+        'severity': 'high',
+        'arbId': arb_id,
+        'betPairId': bet_pair_id,
+        'exposureKey': exposure_key,
+        'exposureReason': reason,
+        'positiveTicket': settlement_record['positive_ticket'],
+        'hedgeTicket': settlement_record['hedge_ticket'],
+        'positiveStatus': positive_status,
+        'hedgeStatus': hedge_status,
+        'requiresManualReview': True,
+        'autoRebetDisabled': True
+    })
+    
+    print(f'[EXPOSURE-{arb_id}] Alert triggered - manual review required')
 
 
 async def load_cooldowns(redis_client):
