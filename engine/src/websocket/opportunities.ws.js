@@ -72,19 +72,19 @@ function initializeWebSocket(server) {
  */
 function broadcastOpportunity(opportunity) {
   if (!wss || clients.size === 0) {
-    return; // No clients connected
+    return;
   }
 
+  const payload = transformOpportunity(opportunity);
   const message = JSON.stringify({
     type: 'opportunity',
-    data: opportunity,
+    data: payload,
     timestamp: new Date().toISOString()
   });
 
   let successCount = 0;
   let failCount = 0;
 
-  // Broadcast to all connected clients
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       try {
@@ -93,11 +93,9 @@ function broadcastOpportunity(opportunity) {
       } catch (error) {
         logger.error('Error sending to WebSocket client:', error);
         failCount++;
-        // Remove dead clients
         clients.delete(client);
       }
     } else {
-      // Remove clients that are not open
       clients.delete(client);
     }
   });
@@ -108,6 +106,56 @@ function broadcastOpportunity(opportunity) {
   if (failCount > 0) {
     logger.warn(`Failed to broadcast to ${failCount} clients`);
   }
+}
+
+/**
+ * Transform opportunity to match-based payload with normalized odds and rounded stakes
+ * @param {Object} opportunity - Raw opportunity data
+ * @returns {Object} Transformed payload
+ */
+function transformOpportunity(opportunity) {
+  const { bet1, bet2, profit, roi } = opportunity;
+
+  const roundStake = (raw) => Math.round(raw / 10) * 10;
+
+  const normalizeOdds = (decimalOdds) => {
+    const decimal = parseFloat(decimalOdds);
+    return {
+      decimal: decimal,
+      hk_odds: decimal - 1
+    };
+  };
+
+  return {
+    match_id: bet1.match_id,
+    sport: bet1.sport || 'unknown',
+    league: bet1.league || 'unknown',
+    home_team: bet1.home_team,
+    away_team: bet1.away_team,
+    match_time: bet1.match_time,
+    bet1: {
+      bookmaker: bet1.bookmaker,
+      market: bet1.market,
+      selection: bet1.selection,
+      odds: normalizeOdds(bet1.odds),
+      stake: {
+        raw: bet1.stake,
+        rounded: roundStake(bet1.stake)
+      }
+    },
+    bet2: {
+      bookmaker: bet2.bookmaker,
+      market: bet2.market,
+      selection: bet2.selection,
+      odds: normalizeOdds(bet2.odds),
+      stake: {
+        raw: bet2.stake,
+        rounded: roundStake(bet2.stake)
+      }
+    },
+    profit: parseFloat(profit.toFixed(2)),
+    roi: parseFloat(roi.toFixed(2))
+  };
 }
 
 /**
