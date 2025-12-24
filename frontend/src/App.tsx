@@ -6,14 +6,12 @@ import { ExecutionHistory } from './components/ExecutionHistory';
 import { DailyProfit } from './components/DailyProfit';
 import { Configuration } from './components/Configuration';
 import { Logs } from './components/Logs';
-import { SystemHealth, ConnectionStatus, BetConfig, LiveOpp, BetHistory, LogEntry } from './types';
+import { SystemHealth, ConnectionStatus, BetConfig, LiveOpp, ExecutedBet, LogEntry } from './types';
 
 function App() {
-    // --- State Management ---
     const [isRunning, setIsRunning] = useState(false);
     const [ping, setPing] = useState(45);
 
-    // Mock Health Status
     const [health, setHealth] = useState<SystemHealth>({
         engineApi: ConnectionStatus.CONNECTED,
         database: ConnectionStatus.CONNECTED,
@@ -21,7 +19,6 @@ function App() {
         worker: ConnectionStatus.STANDBY
     });
 
-    // Configuration State
     const [config, setConfig] = useState<BetConfig>({
         tier1: 100,
         tier2: 50,
@@ -41,39 +38,13 @@ function App() {
         }
     });
 
-    // Mock Data
-    const [scannerData, setScannerData] = useState<LiveOpp[]>([
-        {
-            id: '1',
-            time: '02:03:51',
-            profit: 4.00,
-            legs: [
-                { site: 'Nova', match: 'MU', league: 'EPL', market: 'HT/HDP', pick: '0.25', odds: 2.05 },
-                { site: 'SBO', match: 'Arsenal', league: 'EPL', market: 'HT/HDP', pick: '-0.25', odds: 1.98 }
-            ]
-        },
-        {
-            id: '2',
-            time: '02:04:10',
-            profit: 2.50,
-            legs: [
-                { site: 'Bet365', match: 'Lakers', league: 'NBA', market: 'FT/OU', pick: 'Over 220.5', odds: 1.90 },
-                { site: 'Pinnacle', match: 'Lakers', league: 'NBA', market: 'FT/OU', pick: 'Under 220.5', odds: 2.15 }
-            ]
-        }
-    ]);
-
-    const [historyData, setHistoryData] = useState<BetHistory[]>([
-        { id: '1', time: '02:01:00', site: 'Nova', match: 'MU vs Arsenal', pick: 'MU +0.25', odds: 2.05, stake: 100, status: 'ACCEPTED' },
-        { id: '2', time: '02:01:00', site: 'SBO', match: 'MU vs Arsenal', pick: 'Arsenal -0.25', odds: 1.98, stake: 104, status: 'ACCEPTED' }
-    ]);
-
+    const [scannerData, setScannerData] = useState<LiveOpp[]>([]);
+    const [historyData, setHistoryData] = useState<ExecutedBet[]>([]);
     const [logs, setLogs] = useState<LogEntry[]>([
         { id: '1', timestamp: new Date().toLocaleTimeString(), level: 'INFO', message: 'System initialized successfully.' },
         { id: '2', timestamp: new Date().toLocaleTimeString(), level: 'INFO', message: 'Connected to engine API.' },
     ]);
 
-    // --- Handlers ---
     const toggleBot = () => {
         setIsRunning(!isRunning);
         setHealth(prev => ({
@@ -93,12 +64,130 @@ function App() {
         setLogs(prev => [...prev.slice(-49), newLog]);
     };
 
-    // Simulate some activity
+    useEffect(() => {
+        const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws/opportunities';
+        let ws: WebSocket | null = null;
+        let reconnectTimeout: NodeJS.Timeout;
+
+        const connect = () => {
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    addLog('WebSocket connected', 'SUCCESS');
+                    setHealth(prev => ({ ...prev, engineApi: ConnectionStatus.CONNECTED }));
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+
+                        if (message.type === 'opportunity') {
+                            const opp = message.data;
+                            const transformed: LiveOpp = {
+                                match_id: opp.match_id,
+                                sport: opp.sport || 'unknown',
+                                league: opp.league || 'unknown',
+                                home_team: opp.home_team,
+                                away_team: opp.away_team,
+                                match_time: opp.match_time,
+                                market: opp.bet1.market,
+                                account_a: {
+                                    provider: opp.bet1.bookmaker,
+                                    selection: opp.bet1.selection,
+                                    hk_odds: opp.bet1.odds.hk_odds,
+                                    stake: opp.bet1.stake.rounded
+                                },
+                                account_b: {
+                                    provider: opp.bet2.bookmaker,
+                                    selection: opp.bet2.selection,
+                                    hk_odds: opp.bet2.odds.hk_odds,
+                                    stake: opp.bet2.stake.rounded
+                                },
+                                profit: opp.profit,
+                                roi: opp.roi
+                            };
+
+                            setScannerData(prev => {
+                                const filtered = prev.filter(item => item.match_id !== transformed.match_id);
+                                return [transformed, ...filtered].slice(0, 50);
+                            });
+
+                            addLog(`New opportunity: ${opp.home_team} vs ${opp.away_team}`, 'INFO');
+                        }
+
+                        if (message.type === 'execution') {
+                            const exec = message.data;
+                            const transformed: ExecutedBet = {
+                                match_id: exec.match_id,
+                                sport: exec.sport || 'unknown',
+                                league: exec.league || 'unknown',
+                                home_team: exec.home_team,
+                                away_team: exec.away_team,
+                                match_time: exec.match_time,
+                                market: exec.market,
+                                account_a: {
+                                    provider: exec.account_a.provider,
+                                    selection: exec.account_a.selection,
+                                    hk_odds: exec.account_a.hk_odds,
+                                    stake: exec.account_a.stake,
+                                    status: exec.account_a.status
+                                },
+                                account_b: {
+                                    provider: exec.account_b.provider,
+                                    selection: exec.account_b.selection,
+                                    hk_odds: exec.account_b.hk_odds,
+                                    stake: exec.account_b.stake,
+                                    status: exec.account_b.status
+                                },
+                                profit: exec.profit,
+                                roi: exec.roi,
+                                executed_at: exec.executed_at
+                            };
+
+                            setHistoryData(prev => [transformed, ...prev].slice(0, 100));
+
+                            setScannerData(prev => prev.filter(item => item.match_id !== exec.match_id));
+
+                            addLog(`Executed: ${exec.home_team} vs ${exec.away_team}`, 'SUCCESS');
+                        }
+                    } catch (error) {
+                        console.error('Failed to parse WebSocket message:', error);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    addLog('WebSocket error', 'ERROR');
+                    setHealth(prev => ({ ...prev, engineApi: ConnectionStatus.ERROR }));
+                };
+
+                ws.onclose = () => {
+                    addLog('WebSocket disconnected', 'WARN');
+                    setHealth(prev => ({ ...prev, engineApi: ConnectionStatus.DISCONNECTED }));
+                    reconnectTimeout = setTimeout(connect, 5000);
+                };
+            } catch (error) {
+                console.error('WebSocket connection failed:', error);
+                reconnectTimeout = setTimeout(connect, 5000);
+            }
+        };
+
+        connect();
+
+        return () => {
+            if (ws) {
+                ws.close();
+            }
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+        };
+    }, []);
+
     useEffect(() => {
         if (!isRunning) return;
 
         const interval = setInterval(() => {
-            // Random ping fluctuation
             setPing(Math.floor(Math.random() * 50) + 30);
         }, 2000);
 
@@ -111,7 +200,6 @@ function App() {
 
             <main className="max-w-[1600px] mx-auto p-4 grid grid-cols-12 gap-4">
 
-                {/* Left Column: Accounts & Config (3 cols) */}
                 <div className="col-span-12 lg:col-span-3 space-y-4 flex flex-col h-[calc(100vh-100px)]">
                     <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
                         <AccountPanel
@@ -138,27 +226,21 @@ function App() {
                     </div>
                 </div>
 
-                {/* Middle Column: History & Scanner (6 cols) */}
                 <div className="col-span-12 lg:col-span-6 space-y-4 h-[calc(100vh-100px)] flex flex-col">
-                    {/* Execution History (Top) */}
                     <div className="h-1/3 min-h-[250px]">
                         <ExecutionHistory history={historyData} />
                     </div>
 
-                    {/* Live Scanner (Bottom) */}
                     <div className="flex-1 min-h-[300px]">
                         <LiveScanner data={scannerData} />
                     </div>
                 </div>
 
-                {/* Right Column: Profit & Logs (3 cols) */}
                 <div className="col-span-12 lg:col-span-3 space-y-4 h-[calc(100vh-100px)] flex flex-col">
-                    {/* Daily Profit (Top) */}
                     <div className="h-[200px] shrink-0">
                         <DailyProfit initialBalance={8000} currentBalance={8340.50} />
                     </div>
 
-                    {/* Logs (Bottom) */}
                     <div className="flex-1 min-h-[300px]">
                         <Logs logs={logs} />
                     </div>

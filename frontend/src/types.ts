@@ -33,27 +33,54 @@ export interface BetConfig {
 }
 
 export interface LiveOpp {
-  id: string;
-  time: string;
+  match_id: string;
+  sport: string;
+  league: string;
+  home_team: string;
+  away_team: string;
+  match_time: string;
+  market: string;
+  account_a: {
+    provider: string;
+    selection: string;
+    hk_odds: number;
+    stake: number;
+  };
+  account_b: {
+    provider: string;
+    selection: string;
+    hk_odds: number;
+    stake: number;
+  };
   profit: number;
-  legs: [
-    {
-      site: string;
-      match: string;
-      league: string;
-      market: string; // e.g., HT/HDP
-      pick: string;   // e.g., 0.25 or -0.25
-      odds: number;
-    },
-    {
-      site: string;
-      match: string;
-      league: string;
-      market: string;
-      pick: string;
-      odds: number;
-    }
-  ];
+  roi: number;
+}
+
+export interface ExecutedBet {
+  match_id: string;
+  sport: string;
+  league: string;
+  home_team: string;
+  away_team: string;
+  match_time: string;
+  market: string;
+  account_a: {
+    provider: string;
+    selection: string;
+    hk_odds: number;
+    stake: number;
+    status: 'ACCEPTED' | 'RUNNING' | 'REJECTED';
+  };
+  account_b: {
+    provider: string;
+    selection: string;
+    hk_odds: number;
+    stake: number;
+    status: 'ACCEPTED' | 'RUNNING' | 'REJECTED';
+  };
+  profit: number;
+  roi: number;
+  executed_at: string;
 }
 
 export interface BetHistory {
