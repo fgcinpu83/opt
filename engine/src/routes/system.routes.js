@@ -5,6 +5,8 @@ const router = express.Router();
 const db = require('../config/database');
 const redis = require('../config/redis');
 const logger = require('../config/logger');
+const { initiateManualLogin, checkAuthenticationStatus, getActiveSessions } = require('../services/manual-login.service');
+const { loadEndpointProfile } = require('../services/endpoint-capture.service');
 
 /**
  * GET /api/v1/system/health
@@ -341,105 +343,20 @@ router.get('/whitelabels', async (req, res) => {
 /**
  * POST /api/v1/system/auto-toggle
  * Toggle Auto Robot on/off - START TRADING FLOW
- * 
- * Flow:
- * 1. Check session for Account A & B
- * 2. If not logged in, generate LOGIN URL and return to UI
- * 3. User performs manual login via browser
- * 4. After authentication, auto-capture API + WS endpoints
- * 5. Save endpoints to Redis
- * 6. Validate profile
- * 7. Start scanner & worker
+
  */
 router.post('/auto-toggle', async (req, res) => {
   try {
     const { user_id = 1, enabled } = req.body;
 
-    // If enabling, check account sessions first
-    if (enabled) {
-      // Get account A and B sessions
-      const accountsQuery = `
-        SELECT id, sportsbook, url, username, status
-        FROM sportsbook_accounts
-        WHERE user_id = $1
-        ORDER BY created_at ASC
-        LIMIT 2
-      `;
-      
-      const accountsResult = await db.query(accountsQuery, [user_id]);
+
       const accounts = accountsResult.rows;
 
       if (accounts.length < 2) {
         return res.status(400).json({
           success: false,
           error: 'Need at least 2 accounts configured',
-          message: 'Please configure Account A and Account B first',
-          accounts_configured: accounts.length,
-          accounts_needed: 2
-        });
-      }
 
-      const accountA = accounts[0];
-      const accountB = accounts[1];
-
-      // Check if accounts need login
-      const needsLogin = [];
-      
-      if (accountA.status !== 'online') {
-        needsLogin.push({
-          whitelabel: 'A',
-          account_id: accountA.id,
-          sportsbook: accountA.sportsbook,
-          url: accountA.url,
-          username: accountA.username
-        });
-      }
-
-      if (accountB.status !== 'online') {
-        needsLogin.push({
-          whitelabel: 'B',
-          account_id: accountB.id,
-          sportsbook: accountB.sportsbook,
-          url: accountB.url,
-          username: accountB.username
-        });
-      }
-
-      // If accounts need login, return login URLs
-      if (needsLogin.length > 0) {
-        logger.info('Accounts need manual login', { needsLogin });
-        
-        return res.json({
-          success: false,
-          requires_login: true,
-          message: 'Manual login required',
-          accounts_to_login: needsLogin
-        });
-      }
-
-      // Check if endpoints are captured in Redis
-      const { getEndpointProfile } = require('../capture/endpoint-capture.service');
-      
-      const profileA = await getEndpointProfile('A', accountA.sportsbook);
-      const profileB = await getEndpointProfile('B', accountB.sportsbook);
-
-      if (!profileA || !profileB) {
-        return res.status(400).json({
-          success: false,
-          error: 'Endpoint profiles not captured',
-          message: 'Please complete login process to capture endpoints',
-          profile_a_exists: !!profileA,
-          profile_b_exists: !!profileB
-        });
-      }
-
-      logger.info('All accounts ready, enabling auto trading', {
-        accountA: accountA.sportsbook,
-        accountB: accountB.sportsbook
-      });
-    }
-
-    // Toggle auto robot
     const query = `
       INSERT INTO system_config (user_id, config_key, config_value)
       VALUES ($1, 'auto_robot_enabled', $2)
@@ -463,12 +380,61 @@ router.post('/auto-toggle', async (req, res) => {
 
     res.json({
       success: true,
+      status: 'ready',
       message: `Auto robot ${enabled ? 'enabled' : 'disabled'}`,
       config: result.rows[0]
     });
 
   } catch (error) {
     logger.error('Toggle auto error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/system/auth-status/:accountId
+ * Check authentication status for an account
+ */
+router.get('/auth-status/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const status = await checkAuthenticationStatus(parseInt(accountId));
+
+    res.json({
+      success: true,
+      account_id: accountId,
+      ...status
+    });
+
+  } catch (error) {
+    logger.error('Check auth status error', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/system/active-sessions
+ * Get all active browser sessions
+ */
+router.get('/active-sessions', async (req, res) => {
+  try {
+    const sessions = getActiveSessions();
+
+    res.json({
+      success: true,
+      sessions,
+      count: sessions.length
+    });
+
+  } catch (error) {
+    logger.error('Get active sessions error', { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message

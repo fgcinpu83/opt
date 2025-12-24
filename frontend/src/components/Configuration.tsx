@@ -65,6 +65,52 @@ export const Configuration: React.FC<ConfigurationProps> = ({ config, onChange }
     }
   };
 
+  // Send config to backend when it changes
+  useEffect(() => {
+    const sendConfig = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        
+        // Determine which tiers are enabled based on stake > 0
+        const tiers: number[] = [];
+        if (config.tier1 > 0) tiers.push(1);
+        if (config.tier2 > 0) tiers.push(2);
+        if (config.tier3 > 0) tiers.push(3);
+
+        // Get enabled markets
+        const markets: string[] = [];
+        if (config.markets.ftHdp) markets.push('FT_HDP');
+        if (config.markets.ftOu) markets.push('FT_OU');
+        if (config.markets.ft1x2) markets.push('FT_1X2');
+        if (config.markets.htHdp) markets.push('HT_HDP');
+        if (config.markets.htOu) markets.push('HT_OU');
+        if (config.markets.ht1x2) markets.push('HT_1X2');
+
+        const payload = {
+          user_id: 1,
+          tier: tiers,
+          profitMin: config.minProfit,
+          profitMax: config.maxProfit,
+          markets: markets,
+          matchFilter: config.matchFilter,
+          maxMinuteHT: config.maxMinuteHT,
+          maxMinuteFT: config.maxMinuteFT
+        };
+
+        await fetch(`${apiUrl}/api/v1/config/tiers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (error) {
+        console.error('Failed to send config to backend:', error);
+      }
+    };
+
+    const debounceTimer = setTimeout(sendConfig, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [config]);
+
   const marketOptions: { id: keyof BetConfig['markets']; label: string }[] = [
     { id: 'ftHdp', label: 'FT HDP' },
     { id: 'ftOu', label: 'FT O/U' },

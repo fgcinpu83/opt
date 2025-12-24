@@ -22,7 +22,6 @@ interface WhitelabelAccount {
 function App() {
     const [isRunning, setIsRunning] = useState(false);
     const [ping, setPing] = useState(45);
-    const [accounts, setAccounts] = useState<WhitelabelAccount[]>([]);
 
     const [health, setHealth] = useState<SystemHealth>({
         engineApi: ConnectionStatus.CONNECTED,
@@ -91,6 +90,23 @@ function App() {
         setLogs(prev => [...prev.slice(-49), newLog]);
     };
 
+    // Fetch accounts on mount
+    useEffect(() => {
+        const fetchAccounts = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/sessions?user_id=1`);
+                const data = await response.json();
+                if (data.success && data.accounts) {
+                    setAccounts(data.accounts);
+                }
+            } catch (error) {
+                console.error('Failed to fetch accounts:', error);
+            }
+        };
+        fetchAccounts();
+    }, []);
+
+    // Native WebSocket connection (NO socket.io)
     useEffect(() => {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsHost = import.meta.env.VITE_WS_HOST || window.location.host || 'localhost:3000';
@@ -247,26 +263,7 @@ function App() {
 
                 <div className="col-span-12 lg:col-span-3 space-y-4 flex flex-col h-[calc(100vh-100px)]">
                     <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
-                        <AccountPanel
-                            label="Account A"
-                            whitelabel="A"
-                            initialSportsbook="NOVA"
-                            isConnected={true}
-                            isRunning={isRunning}
-                            ping={ping}
-                            balance={5240.50}
-                            onToggleBot={toggleBot}
-                        />
-                        <AccountPanel
-                            label="Account B"
-                            whitelabel="B"
-                            initialSportsbook="SBOBET"
-                            isConnected={true}
-                            isRunning={isRunning}
-                            ping={ping + 12}
-                            balance={3100.00}
-                            onToggleBot={toggleBot}
-                        />
+
                     </div>
                     <div className="flex-1 min-h-[300px]">
                         <Configuration config={config} onChange={setConfig} />
